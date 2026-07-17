@@ -949,27 +949,15 @@ function PrintView({ev,onClose}){
   td{border:1px solid #C8D4E8;padding:4px 7px;font-size:10pt;vertical-align:top;line-height:1.4}
   img{max-height:42px;object-fit:contain}
   /* Page layout */
-  @page{size:A4 portrait;margin:10mm 12mm 10mm 12mm}
-  /* Running header: HIDDEN on screen, fixed on print pages 2+ */
+  @page{size:A4 portrait;margin:12mm 15mm 12mm 15mm}
+  /* Elements hidden on screen */
   .rh{display:none}
-  .pf{display:none}
   @media print{
     .tip{display:none!important}
     body{padding:0}
-    /* Running header pages 2+: fixed at top, matches page margins */
-    .rh{display:block;position:fixed;top:0;left:0;right:0;background:#fff;padding:3px 12mm 3px;font-family:Arial,sans-serif;border-bottom:0.5px solid #C8D4E8}
-    /* Page 1 footer: fixed at bottom of page 1 only — use static placement trick */
-    .pf{display:block;position:fixed;bottom:0;left:0;right:0;background:#fff;padding:3px 12mm 3px;font-family:Arial,sans-serif;border-top:0.5px solid #bbb}
   }
-  .rh-inner{width:100%;border-collapse:collapse}
-  .rh-inner td{border:1px solid #C8D4E8;padding:3px 6px;font-size:7.5pt;vertical-align:top}
   .rh-label{color:#265898;font-weight:700;font-size:7.5pt}
-  .rh-note{font-size:6pt;color:#555;padding:2px 0 0;font-family:Arial,sans-serif}
-  .pf-copy{font-size:6.5pt;color:#111;margin-bottom:2px;font-family:Arial,sans-serif}
-  .pf-conf{font-size:6.5pt;color:#111;margin-bottom:3px;font-family:Arial,sans-serif}
-  .pf-conf b{font-weight:700}
-  .pf-inner{width:100%;border-collapse:collapse}
-  .pf-inner td{border:1px solid #C8D4E8;padding:2px 5px;font-size:7.5pt;vertical-align:top}
+  .pf-label{color:#265898;font-weight:700;font-size:7.5pt}
 </style>
 </head><body>
 <div class="tip">
@@ -977,27 +965,6 @@ function PrintView({ev,onClose}){
   <button onclick="window.print()">🖨 Imprimir / PDF</button>
 </div>
 
-<!-- ═══ RUNNING HEADER: pages 2+ ═══ -->
-<div class="rh">
-  <table class="rh-inner" style="margin-bottom:1px"><tbody>
-    <tr>
-      <td style="width:25%"><span class="rh-label">Organización:</span><br/>Bradken</td>
-      <td style="width:25%"><span class="rh-label">Proceso:</span><br/>Capability &amp; Training</td>
-      <td style="width:25%"><span class="rh-label">Region:</span><br/>Chilca</td>
-      <td style="width:25%"><span class="rh-label">Tipo de documento:</span><br/>Form (blank)</td>
-    </tr>
-    <tr>
-      <td colspan="4"><span class="rh-label">Título del Documento:</span> ${docTitle}</td>
-    </tr>
-    <tr>
-      <td><span class="rh-label">BKN Doc &amp; Revision:</span> ${ev.docCode||''}</td>
-      <td><span class="rh-label">Fecha:</span> 30-Jun-26</td>
-      <td><span class="rh-label">Revisado por:</span> avera</td>
-      <td><span class="rh-label">Aprobado por:</span> hramamurthi</td>
-    </tr>
-  </tbody></table>
-  <div class="rh-note">Uncontrolled Copy if it has been printed or downloaded outside a validated copy control register</div>
-</div>
 
 ${el.innerHTML}
 
