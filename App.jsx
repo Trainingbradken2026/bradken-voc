@@ -1062,18 +1062,9 @@ ${el.innerHTML}
     {/* ── Print controls ── */}
     <div className="no-print" style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,paddingBottom:12,borderBottom:`1.5px solid ${BK}`}}>
       <div style={{display:'flex',gap:8,alignItems:'center'}}>
-        <button onClick={()=>{
-          const a=document.createElement('a');
-          a.href=`/api/generate-docx?id=${ev.id}`;
-          a.download=`VOC_${(ev.type||'').toUpperCase()}_${(ev.participant?.nombres||'').replace(/\s+/g,'_')}_${ev.id}.docx`;
-          a.click();
-        }} style={{...s.btnPrimary,gap:6,background:'#1A5276'}}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          Descargar DOCX (Word)
-        </button>
-        <button onClick={handlePDF} style={{...s.btn,gap:6}}>
+        <button onClick={handlePDF} style={{...s.btnPrimary,gap:6}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          HTML (alternativo)
+          Descargar documento (.html)
         </button>
         <button onClick={onClose} style={s.btn}>← Volver</button>
       </div>
