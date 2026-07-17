@@ -1297,10 +1297,10 @@ ${el.innerHTML}
       </tr>
       <tr>
         {[
-          ['BKN Doc & Revisión',ev.docCode],
-          ['Fecha',ev.evaluator?.fecha||today2()],
-          ['Revisado por','avera'],
-          ['Aprobado por','hramamurthi'],
+['BKN Doc & Revisión',ev.docCode],
+['Fecha','30-Jun-26'],
+['Revisado por','avera'],
+['Aprobado por','hramamurthi'],
         ].map(([lbl,val],i)=>(
           <td key={i} style={{border:'1px solid #C8D8EC',padding:'6px 10px',verticalAlign:'top'}}>
             <span style={{fontSize:10,color:'#888'}}>{lbl}: </span>
