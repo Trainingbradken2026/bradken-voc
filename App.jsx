@@ -1262,6 +1262,7 @@ ${el.innerHTML}
     </tbody></table>}
 
     {/* ── RESUMEN DE REVISIONES ── */}
+    <div style={{textAlign:'center',fontSize:12,fontWeight:600,margin:'10px 0 4px',color:'#1A1A2E'}}>Tabla 1.&nbsp;&nbsp;Resumen de la revisión</div>
     <table style={{width:'100%',borderCollapse:'collapse',marginBottom:6}}><tbody>
       <tr>
         <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:BKDARK,color:'#fff',width:'6%'}}>Rev.</td>
