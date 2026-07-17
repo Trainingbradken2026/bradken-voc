@@ -963,9 +963,9 @@ function ResultBadge({r}){
 }
 
 function PrintView({ev,onClose}){
- const [pdfLoading,setPdfLoading]=useState(false);
-const [pdfError,setPdfError]=useState('');
-const [showPrintTip,setShowPrintTip]=useState(false);
+  const [pdfLoading,setPdfLoading]=React.useState(false);
+  const [pdfError,setPdfError]=React.useState('');
+  const [showPrintTip,setShowPrintTip]=React.useState(false);
   const typeInfo=TYPES.find(x=>x.id===ev.type);
   const BK='#005596';
   const BKL='#0066AA';
@@ -988,7 +988,7 @@ const [showPrintTip,setShowPrintTip]=useState(false);
 <meta charset="utf-8">
 <title>VOC_${ev.type.toUpperCase()}_${(ev.participant.nombres||'')}_${ev.id}</title>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
+  *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:Calibri,Arial,sans-serif;background:#fff;color:#111;padding:0}
   .tip{background:#005596;color:#fff;padding:12px 18px;margin-bottom:14px;border-radius:0;display:flex;justify-content:space-between;align-items:center;font-size:13px}
   .tip button{background:#fff;color:#005596;border:none;padding:6px 14px;border-radius:4px;font-weight:700;cursor:pointer;font-size:12px}
@@ -1081,37 +1081,41 @@ ${el.innerHTML}
     {/* ══ PRINTABLE DOCUMENT CONTENT ══ */}
     <div id="bradken-print-doc" style={{background:'#fff',padding:'4px'}}>
 
-    {/* ══ PAGE 1 HEADER: Blue diagonal banner + Bradken logo ══ */}
-    <div style={{position:'relative',width:'100%',height:80,marginBottom:16,overflow:'hidden'}}>
-      {/* Blue gradient banner with diagonal right edge */}
+    {/* ══ PAGE 1 HEADER: Full blue bar with logo card overlapping right ══ */}
+    <div style={{position:'relative',marginBottom:12}}>
+      {/* Full-width solid blue bar — no diagonal */}
       <div style={{
-        position:'absolute',top:0,left:0,width:'100%',height:'100%',
-        background:'linear-gradient(to right, #001a3a 0%, #003375 45%, #005596 78%)',
-        clipPath:'polygon(0 0, 82% 0, 70% 100%, 0 100%)',
+        width:'100%',height:58,
+        background:'linear-gradient(to right, #001a3a 0%, #003375 45%, #005596 100%)',
       }}/>
-      {/* Bradken logo — right side, vertically centred */}
+      {/* Logo card — sits ON TOP of the blue bar, not flush right so bar shows on both sides */}
       <div style={{
-        position:'absolute',right:0,top:0,bottom:0,width:'30%',
-        display:'flex',alignItems:'center',justifyContent:'flex-end',paddingRight:4,
+        position:'absolute',top:0,right:12,width:'26%',
+        background:'#fff',
+        boxShadow:'0 2px 12px rgba(0,0,0,0.20)',
+        padding:'10px 14px',
+        display:'flex',alignItems:'center',justifyContent:'center',
+        minHeight:82,zIndex:2,
       }}>
         <BradkenLogo/>
       </div>
+      {/* Disclaimer text — left side below the bar */}
+      <div style={{paddingRight:'30%',paddingTop:6}}>
+        <p style={{fontSize:9,color:'#555',lineHeight:1.5,margin:0}}>
+          Si este documento se ha impreso o descargado, se convierte inmediatamente en una copia no controlada y no puede utilizarse ni consultarse en ningún requisito operativo a menos que se utilice un registro de control de copias validado o un sistema equivalente.
+        </p>
+      </div>
     </div>
-
-    {/* Disclaimer — small text below banner */}
-    <p style={{fontSize:8,color:'#777',lineHeight:1.4,margin:'0 0 10px 0'}}>
-      Si este documento se ha impreso o descargado, se convierte inmediatamente en una copia no controlada y no puede utilizarse ni consultarse en ningún requisito operativo a menos que se utilice un registro de control de copias validado o un sistema equivalente.
-    </p>
 
     {/* ── DOCUMENT TITLE SECTION ── */}
     <div style={{marginBottom:14}}>
-      <div style={{fontFamily:'Arial,sans-serif',fontSize:24,fontWeight:400,color:'#005596',marginBottom:6,lineHeight:1.2}}>
-        Bradken Formulario (blanco)
+      <div style={{fontFamily:'Arial,sans-serif',fontSize:22,fontWeight:700,color:'#111',marginBottom:2,lineHeight:1.2}}>
+        Formulario Bradken (en Blanco)
       </div>
-      <div style={{fontFamily:'Arial,sans-serif',fontSize:24,fontWeight:400,color:'#919194',lineHeight:1.3,marginBottom:2}}>
+      <div style={{fontFamily:'Arial,sans-serif',fontSize:20,fontWeight:700,color:'#919194',marginBottom:2,lineHeight:1.3}}>
         {typeInfo?.label}
       </div>
-      <div style={{fontFamily:'Arial,sans-serif',fontSize:24,fontWeight:400,color:'#919194',lineHeight:1.3}}>
+      <div style={{fontFamily:'Arial,sans-serif',fontSize:18,fontWeight:700,color:'#919194',lineHeight:1.3}}>
         {isLicencia
           ? `${roleLabel} ${subtitle}`
           : `Verificación de Competencia – ${roleLabel}`}
@@ -1262,14 +1266,13 @@ ${el.innerHTML}
     </tbody></table>}
 
     {/* ── RESUMEN DE REVISIONES ── */}
-    <div style={{textAlign:'center',fontSize:12,fontWeight:600,margin:'10px 0 4px',color:'#1A1A2E'}}>Tabla 1.&nbsp;&nbsp;Resumen de la revisión</div>
     <table style={{width:'100%',borderCollapse:'collapse',marginBottom:6}}><tbody>
       <tr>
-        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:'#005596',color:'#fff',width:'6%'}}>Rev.</td>
-        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:'#005596',color:'#fff',width:'14%'}}>Fecha de Emisión</td>
-        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:'#005596',color:'#fff',width:'44%'}}>Cláusula/Sección revisada y Lista de cambios</td>
-        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:'#005596',color:'#fff',width:'18%'}}>Revisado por</td>
-        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:'#005596',color:'#fff',width:'18%'}}>Aprobado por</td>
+        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:BKDARK,color:'#fff',width:'6%'}}>Rev.</td>
+        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:BKDARK,color:'#fff',width:'14%'}}>Fecha de Emisión</td>
+        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:BKDARK,color:'#fff',width:'44%'}}>Cláusula/Sección revisada y Lista de cambios</td>
+        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:BKDARK,color:'#fff',width:'18%'}}>Revisado por</td>
+        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:BKDARK,color:'#fff',width:'18%'}}>Aprobado por</td>
       </tr>
       <tr>
         <C>1</C><C>30-Jun-26</C><C>Emisión inicial – formato Bradken Chilca.</C><C>avera</C><C>hramamurthi</C>
@@ -1298,10 +1301,10 @@ ${el.innerHTML}
       </tr>
       <tr>
         {[
-['BKN Doc & Revisión',ev.docCode],
-['Fecha','30-Jun-26'],
-['Revisado por','avera'],
-['Aprobado por','hramamurthi'],
+          ['BKN Doc & Revisión',ev.docCode],
+          ['Fecha',ev.evaluator?.fecha||today2()],
+          ['Revisado por','avera'],
+          ['Aprobado por','hramamurthi'],
         ].map(([lbl,val],i)=>(
           <td key={i} style={{border:'1px solid #C8D8EC',padding:'6px 10px',verticalAlign:'top'}}>
             <span style={{fontSize:10,color:'#888'}}>{lbl}: </span>
