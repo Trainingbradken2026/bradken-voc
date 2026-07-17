@@ -988,7 +988,7 @@ const [showPrintTip,setShowPrintTip]=useState(false);
 <meta charset="utf-8">
 <title>VOC_${ev.type.toUpperCase()}_${(ev.participant.nombres||'')}_${ev.id}</title>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
   body{font-family:Calibri,Arial,sans-serif;background:#fff;color:#111;padding:0}
   .tip{background:#005596;color:#fff;padding:12px 18px;margin-bottom:14px;border-radius:0;display:flex;justify-content:space-between;align-items:center;font-size:13px}
   .tip button{background:#fff;color:#005596;border:none;padding:6px 14px;border-radius:4px;font-weight:700;cursor:pointer;font-size:12px}
