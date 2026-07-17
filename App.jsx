@@ -1057,7 +1057,7 @@ ${el.innerHTML}
 
     {/* ── DOCUMENT TITLE SECTION ── */}
     <div style={{marginBottom:14}}>
-      <div style={{fontFamily:'Arial,sans-serif',fontSize:22,fontWeight:700,color:'#111',marginBottom:2,lineHeight:1.2}}>
+      <div style={{fontFamily:'Arial,sans-serif',fontSize:22,fontWeight:700,color:'#005596',marginBottom:2,lineHeight:1.2}}>
         Formulario Bradken (en Blanco)
       </div>
       <div style={{fontFamily:'Arial,sans-serif',fontSize:20,fontWeight:700,color:'#919194',marginBottom:2,lineHeight:1.3}}>
