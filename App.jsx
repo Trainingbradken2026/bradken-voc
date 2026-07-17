@@ -951,18 +951,24 @@ function PrintView({ev,onClose}){
   /* Page layout */
   @page{size:A4 portrait;margin:10mm 12mm 10mm 12mm}
   @page:first{margin-bottom:62mm}
-  /* Running header (pages 2+) */
-  .rh{position:fixed;top:0;left:0;right:0;background:#fff;padding:4px 12mm 3px;font-family:Arial,sans-serif;font-size:8pt}
+  /* Running header and footer: HIDDEN on screen, only visible in print */
+  .rh{display:none}
+  .pf{display:none}
+  @media print{
+    .tip{display:none!important}
+    body{padding:0}
+    /* Running header: pages 2+ */
+    .rh{display:block;position:fixed;top:0;left:0;right:0;background:#fff;padding:4px 12mm 3px;font-family:Arial,sans-serif;font-size:8pt}
+    /* Page 1 footer */
+    .pf{display:block;position:fixed;bottom:0;left:0;right:0;background:#fff;padding:3px 12mm 4px;font-family:Arial,sans-serif;border-top:0.5px solid #bbb}
+  }
   .rh-inner td{border:1px solid #C8D4E8;padding:3px 6px;font-size:8pt;vertical-align:top}
   .rh-label{color:#265898;font-weight:700;font-size:8pt}
   .rh-note{font-size:6.5pt;color:#555;padding:3px 0 0}
-  /* Page 1 footer */
-  .pf{position:fixed;bottom:0;left:0;right:0;background:#fff;padding:3px 12mm 4px;font-family:Arial,sans-serif;border-top:0.5px solid #bbb}
   .pf-copy{font-size:6.5pt;color:#111;margin-bottom:2px}
   .pf-conf{font-size:6.5pt;color:#111;margin-bottom:3px}
   .pf-conf b{font-weight:700}
   .pf-inner td{border:1px solid #C8D4E8;padding:2px 5px;font-size:8pt;vertical-align:top}
-  @media print{.tip{display:none!important}body{padding:0}}
 </style>
 </head><body>
 <div class="tip">
