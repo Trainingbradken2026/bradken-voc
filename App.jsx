@@ -1265,11 +1265,11 @@ ${el.innerHTML}
     <div style={{textAlign:'center',fontSize:12,fontWeight:600,margin:'10px 0 4px',color:'#1A1A2E'}}>Tabla 1.&nbsp;&nbsp;Resumen de la revisión</div>
     <table style={{width:'100%',borderCollapse:'collapse',marginBottom:6}}><tbody>
       <tr>
-        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:BKDARK,color:'#fff',width:'6%'}}>Rev.</td>
-        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:BKDARK,color:'#fff',width:'14%'}}>Fecha de Emisión</td>
-        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:BKDARK,color:'#fff',width:'44%'}}>Cláusula/Sección revisada y Lista de cambios</td>
-        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:BKDARK,color:'#fff',width:'18%'}}>Revisado por</td>
-        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:BKDARK,color:'#fff',width:'18%'}}>Aprobado por</td>
+        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:'#005596',color:'#fff',width:'6%'}}>Rev.</td>
+        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:'#005596',color:'#fff',width:'14%'}}>Fecha de Emisión</td>
+        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:'#005596',color:'#fff',width:'44%'}}>Cláusula/Sección revisada y Lista de cambios</td>
+        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:'#005596',color:'#fff',width:'18%'}}>Revisado por</td>
+        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:'#005596',color:'#fff',width:'18%'}}>Aprobado por</td>
       </tr>
       <tr>
         <C>1</C><C>30-Jun-26</C><C>Emisión inicial – formato Bradken Chilca.</C><C>avera</C><C>hramamurthi</C>
