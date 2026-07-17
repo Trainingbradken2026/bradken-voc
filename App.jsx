@@ -935,6 +935,7 @@ function PrintView({ev,onClose}){
     const logoImg=el.querySelector('img[alt="Bradken"]');
     const logoSrc=logoImg?logoImg.src:'';
 
+    const docTitle=`${typeInfo?.label}${isLicencia?` — ${roleLabel} ${subtitle}`:` — Verificación de Competencia — ${roleLabel}`}`;
     const html=`<!DOCTYPE html>
 <html lang="es"><head>
 <meta charset="utf-8">
@@ -947,14 +948,70 @@ function PrintView({ev,onClose}){
   table{border-collapse:collapse;width:100%;margin-bottom:5px}
   td{border:1px solid #C8D4E8;padding:4px 7px;font-size:10pt;vertical-align:top;line-height:1.4}
   img{max-height:42px;object-fit:contain}
-  @page{size:A4 portrait;margin:1cm 1.2cm}
+  /* Page layout */
+  @page{size:A4 portrait;margin:10mm 12mm 10mm 12mm}
+  @page:first{margin-bottom:62mm}
+  /* Running header (pages 2+) */
+  .rh{position:fixed;top:0;left:0;right:0;background:#fff;padding:4px 12mm 3px;font-family:Arial,sans-serif;font-size:8pt}
+  .rh-inner td{border:1px solid #C8D4E8;padding:3px 6px;font-size:8pt;vertical-align:top}
+  .rh-label{color:#265898;font-weight:700;font-size:8pt}
+  .rh-note{font-size:6.5pt;color:#555;padding:3px 0 0}
+  /* Page 1 footer */
+  .pf{position:fixed;bottom:0;left:0;right:0;background:#fff;padding:3px 12mm 4px;font-family:Arial,sans-serif;border-top:0.5px solid #bbb}
+  .pf-copy{font-size:6.5pt;color:#111;margin-bottom:2px}
+  .pf-conf{font-size:6.5pt;color:#111;margin-bottom:3px}
+  .pf-conf b{font-weight:700}
+  .pf-inner td{border:1px solid #C8D4E8;padding:2px 5px;font-size:8pt;vertical-align:top}
   @media print{.tip{display:none!important}body{padding:0}}
 </style>
 </head><body>
 <div class="tip">
-  <span>📄 Presiona <strong>Ctrl+P</strong> (Windows) / <strong>Cmd+P</strong> (Mac) → destino: <strong>Guardar como PDF</strong></span>
+  <span>📄 Presiona <strong>Ctrl+P</strong> → activar <strong>☑ Gráficos en segundo plano</strong> → destino: <strong>Guardar como PDF</strong></span>
   <button onclick="window.print()">🖨 Imprimir / PDF</button>
 </div>
+
+<!-- ═══ RUNNING HEADER: pages 2+ (also appears page 1 but banner covers it) ═══ -->
+<div class="rh">
+  <table class="rh-inner" style="margin-bottom:1px"><tbody>
+    <tr>
+      <td style="width:25%"><span class="rh-label">Organización:</span><br/>Bradken</td>
+      <td style="width:25%"><span class="rh-label">Proceso:</span><br/>Capability &amp; Training</td>
+      <td style="width:25%"><span class="rh-label">Region:</span><br/>Chilca</td>
+      <td style="width:25%"><span class="rh-label">Tipo de documento:</span><br/>Form (blank)</td>
+    </tr>
+    <tr>
+      <td colspan="4"><span class="rh-label">Título del Documento:</span> ${docTitle}</td>
+    </tr>
+    <tr>
+      <td><span class="rh-label">BKN Doc &amp; Revision:</span> ${ev.docCode||''}</td>
+      <td><span class="rh-label">Fecha:</span> 30-Jun-26</td>
+      <td><span class="rh-label">Revisado por:</span> avera</td>
+      <td><span class="rh-label">Aprobado por:</span> hramamurthi</td>
+    </tr>
+  </tbody></table>
+  <div class="rh-note">Uncontrolled Copy if it has been printed or downloaded outside a validated copy control register</div>
+</div>
+
+<!-- ═══ PAGE 1 FOOTER ═══ -->
+<div class="pf">
+  <div class="pf-copy">© <b>Bradken Pty Limited 2026</b> &nbsp;|&nbsp; ABN 33 108 693 009 &nbsp;|&nbsp; Page: 1 &nbsp;|&nbsp; ${ev.docCode||''}</div>
+  <div class="pf-conf"><b>Confidential Internal Use Only:</b><br/>This document, including any attachments, is confidential and may contain commercially sensitive information. Please notify Bradken if you have received this document in error. Any unauthorised use of this document or anything contained in it is expressly prohibited.</div>
+  <table class="pf-inner" style="margin-top:3px"><tbody>
+    <tr>
+      <td style="width:25%"><span class="rh-label">Organización:</span><br/>Bradken</td>
+      <td style="width:25%"><span class="rh-label">Proceso:</span><br/>Capability &amp; Training</td>
+      <td style="width:25%"><span class="rh-label">Region:</span><br/>Chilca</td>
+      <td style="width:25%"><span class="rh-label">Tipo de documento:</span><br/>Form (blank)</td>
+    </tr>
+    <tr>
+      <td><span class="rh-label">BKN Doc &amp; Revision:</span> ${ev.docCode||''}</td>
+      <td><span class="rh-label">Fecha:</span> 30-Jun-2026</td>
+      <td><span class="rh-label">Revisado por:</span> avera</td>
+      <td><span class="rh-label">Aprobado por:</span> hramamurthi</td>
+    </tr>
+  </tbody></table>
+</div>
+
 ${el.innerHTML}
 </body></html>`;
 
