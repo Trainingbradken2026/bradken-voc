@@ -963,9 +963,9 @@ function ResultBadge({r}){
 }
 
 function PrintView({ev,onClose}){
-  const [pdfLoading,setPdfLoading]=React.useState(false);
-  const [pdfError,setPdfError]=React.useState('');
-  const [showPrintTip,setShowPrintTip]=React.useState(false);
+  const [pdfLoading,setPdfLoading]=useState(false);
+  const [pdfError,setPdfError]=useState('');
+  const [showPrintTip,setShowPrintTip]=useState(false);
   const typeInfo=TYPES.find(x=>x.id===ev.type);
   const BK='#005596';
   const BKL='#0066AA';
