@@ -1033,31 +1033,27 @@ ${el.innerHTML}
     {/* ══ PRINTABLE DOCUMENT CONTENT ══ */}
     <div id="bradken-print-doc" style={{background:'#fff',padding:'4px'}}>
 
-    {/* ══ PAGE 1 HEADER: Full blue bar with logo card overlapping right ══ */}
-    <div style={{position:'relative',marginBottom:12}}>
-      {/* Full-width solid blue bar — no diagonal */}
+    {/* ══ PAGE 1 HEADER: Diagonal blue banner + logo floating in white space ══ */}
+    <div style={{position:'relative',width:'100%',height:76,marginBottom:8,overflow:'hidden'}}>
+      {/* Blue diagonal banner — dark left, lighter blue, diagonal cut to white on right */}
       <div style={{
-        width:'100%',height:58,
-        background:'linear-gradient(to right, #001a3a 0%, #003375 45%, #005596 100%)',
+        position:'absolute',top:0,left:0,width:'100%',height:'100%',
+        background:'linear-gradient(to right, #001a3a 0%, #003375 45%, #005596 78%)',
+        clipPath:'polygon(0 0, 80% 0, 68% 100%, 0 100%)',
       }}/>
-      {/* Logo card — large card, logo fills it, extends well below blue bar */}
+      {/* Bradken logo — floating in the white space on the right */}
       <div style={{
-        position:'absolute',top:0,right:14,width:'27%',
-        background:'#fff',
-        boxShadow:'3px 3px 12px rgba(0,0,0,0.22)',
-        padding:'14px 18px 16px',
-        display:'flex',alignItems:'center',justifyContent:'center',
-        minHeight:130,zIndex:2,
+        position:'absolute',right:0,top:0,bottom:0,width:'28%',
+        display:'flex',alignItems:'center',justifyContent:'flex-end',paddingRight:8,
       }}>
         <BradkenLogo/>
       </div>
-      {/* Disclaimer text — left side below the bar */}
-      <div style={{paddingRight:'30%',paddingTop:6}}>
-        <p style={{fontSize:9,color:'#555',lineHeight:1.5,margin:0}}>
-          Si este documento se ha impreso o descargado, se convierte inmediatamente en una copia no controlada y no puede utilizarse ni consultarse en ningún requisito operativo a menos que se utilice un registro de control de copias validado o un sistema equivalente.
-        </p>
-      </div>
     </div>
+
+    {/* Disclaimer text below banner */}
+    <p style={{fontSize:8.5,color:'#555',lineHeight:1.5,margin:'0 0 10px 0'}}>
+      Si este documento se ha impreso o descargado, se convierte inmediatamente en una copia no controlada y no puede utilizarse ni consultarse en ningún requisito operativo a menos que se utilice un registro de control de copias validado o un sistema equivalente.
+    </p>
 
     {/* ── DOCUMENT TITLE SECTION ── */}
     <div style={{marginBottom:14}}>
