@@ -967,26 +967,6 @@ function PrintView({ev,onClose}){
 
 
 ${el.innerHTML}
-
-<!-- ═══ PAGE 1 FOOTER: static content at end of document ═══ -->
-<div style="margin-top:24px;padding-top:4px;border-top:0.5px solid #bbb;font-family:Arial,sans-serif;page-break-inside:avoid">
-  <div style="font-size:6.5pt;color:#111;margin-bottom:2px">© <b>Bradken Pty Limited 2026</b> &nbsp;|&nbsp; ABN 33 108 693 009 &nbsp;|&nbsp; Page: 1 &nbsp;|&nbsp; ${ev.docCode||''}</div>
-  <div style="font-size:6.5pt;color:#111;margin-bottom:3px"><b>Confidential Internal Use Only:</b><br/>This document, including any attachments, is confidential and may contain commercially sensitive information. Please notify Bradken if you have received this document in error. Any unauthorised use of this document or anything contained in it is expressly prohibited.</div>
-  <table style="width:100%;border-collapse:collapse"><tbody>
-    <tr>
-      <td style="border:1px solid #C8D4E8;padding:2px 5px;font-size:7.5pt;width:25%;vertical-align:top"><span style="color:#265898;font-weight:700">Organización:</span><br/>Bradken</td>
-      <td style="border:1px solid #C8D4E8;padding:2px 5px;font-size:7.5pt;width:25%;vertical-align:top"><span style="color:#265898;font-weight:700">Proceso:</span><br/>Capability &amp; Training</td>
-      <td style="border:1px solid #C8D4E8;padding:2px 5px;font-size:7.5pt;width:25%;vertical-align:top"><span style="color:#265898;font-weight:700">Region:</span><br/>Chilca</td>
-      <td style="border:1px solid #C8D4E8;padding:2px 5px;font-size:7.5pt;width:25%;vertical-align:top"><span style="color:#265898;font-weight:700">Tipo de documento:</span><br/>Form (blank)</td>
-    </tr>
-    <tr>
-      <td style="border:1px solid #C8D4E8;padding:2px 5px;font-size:7.5pt;vertical-align:top"><span style="color:#265898;font-weight:700">BKN Doc &amp; Revision:</span><br/>${ev.docCode||''}</td>
-      <td style="border:1px solid #C8D4E8;padding:2px 5px;font-size:7.5pt;vertical-align:top"><span style="color:#265898;font-weight:700">Fecha:</span> 30-Jun-2026</td>
-      <td style="border:1px solid #C8D4E8;padding:2px 5px;font-size:7.5pt;vertical-align:top"><span style="color:#265898;font-weight:700">Revisado por:</span> avera</td>
-      <td style="border:1px solid #C8D4E8;padding:2px 5px;font-size:7.5pt;vertical-align:top"><span style="color:#265898;font-weight:700">Aprobado por:</span> hramamurthi</td>
-    </tr>
-  </tbody></table>
-</div>
 </body></html>`;
 
     try{
