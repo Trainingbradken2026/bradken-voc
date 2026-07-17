@@ -949,7 +949,7 @@ function PrintView({ev,onClose}){
   td{border:1px solid #C8D4E8;padding:4px 7px;font-size:10pt;vertical-align:top;line-height:1.4}
   img{max-height:42px;object-fit:contain}
   /* Page layout */
-  @page{size:A4 portrait;margin:12mm 15mm 12mm 15mm}
+  @page{size:A4 portrait;margin:8mm 10mm 8mm 10mm}
   /* Elements hidden on screen */
   .rh{display:none}
   @media print{
@@ -1240,7 +1240,7 @@ ${el.innerHTML}
     </tbody></table>
 
     {/* ══ BOTTOM META TABLE (Organización / Título / BKN Doc) ══ */}
-    <table style={{width:'100%',borderCollapse:'collapse',marginTop:16,marginBottom:8,border:'1px solid #C8D8EC'}}><tbody>
+    <table style={{width:'100%',borderCollapse:'collapse',marginTop:8,marginBottom:4,border:'1px solid #C8D8EC'}}><tbody>
       <tr>
         {['Organización','Proceso','Región','Tipo de documento'].map((lbl,i)=>(
           <td key={i} style={{border:'1px solid #C8D8EC',padding:'6px 10px',width:'25%',verticalAlign:'top'}}>
