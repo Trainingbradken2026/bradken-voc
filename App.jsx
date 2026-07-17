@@ -940,7 +940,7 @@ function PrintView({ev,onClose}){
 <meta charset="utf-8">
 <title>VOC_${ev.type.toUpperCase()}_${(ev.participant.nombres||'')}_${ev.id}</title>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
   body{font-family:Calibri,Arial,sans-serif;background:#fff;color:#111;padding:0}
   .tip{background:#005596;color:#fff;padding:12px 18px;margin-bottom:14px;border-radius:0;display:flex;justify-content:space-between;align-items:center;font-size:13px}
   .tip button{background:#fff;color:#005596;border:none;padding:6px 14px;border-radius:4px;font-weight:700;cursor:pointer;font-size:12px}
@@ -1217,11 +1217,11 @@ ${el.innerHTML}
     <div style={{textAlign:'center',fontSize:12,fontWeight:600,margin:'10px 0 4px',color:'#1A1A2E'}}>Tabla 1.&nbsp;&nbsp;Resumen de la revisión</div>
     <table style={{width:'100%',borderCollapse:'collapse',marginBottom:6}}><tbody>
       <tr>
-        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:BKDARK,color:'#fff',width:'6%'}}>Rev.</td>
-        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:BKDARK,color:'#fff',width:'14%'}}>Fecha de Emisión</td>
-        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:BKDARK,color:'#fff',width:'44%'}}>Cláusula/Sección revisada y Lista de cambios</td>
-        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:BKDARK,color:'#fff',width:'18%'}}>Revisado por</td>
-        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:BKDARK,color:'#fff',width:'18%'}}>Aprobado por</td>
+        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:'#005596',color:'#fff',width:'6%'}}>Rev.</td>
+        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:'#005596',color:'#fff',width:'14%'}}>Fecha de Emisión</td>
+        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:'#005596',color:'#fff',width:'44%'}}>Cláusula/Sección revisada y Lista de cambios</td>
+        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:'#005596',color:'#fff',width:'18%'}}>Revisado por</td>
+        <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:'#005596',color:'#fff',width:'18%'}}>Aprobado por</td>
       </tr>
       <tr>
         <C>1</C><C>30-Jun-26</C><C>Emisión inicial – formato Bradken Chilca.</C><C>avera</C><C>hramamurthi</C>
