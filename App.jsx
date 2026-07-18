@@ -859,6 +859,20 @@ bm1: { operador: [
     ]},
   ]},
 };
+// Default doc metadata — Training can override per type in Supabase
+const DOC_META_DEFAULTS={};
+TYPES.forEach(t=>{
+  DOC_META_DEFAULTS[t.id]={
+    bknDoc:t.code,
+    fecha:'30-Jun-26',
+    revisadoPor:'avera',
+    aprobadoPor:'hramamurthi',
+    rev:'1',
+    fechaEmision:'30-Jun-26',
+    clausula:'Emisión inicial – formato Bradken Chilca.',
+  };
+});
+
 async function getAI(ev){
   const nca=ev.domains.flatMap(d=>d.items.filter(i=>i.result==='NCA').map(i=>i.text));
   if(!nca.length) return '';
@@ -914,7 +928,8 @@ function ResultBadge({r}){
   </span>;
 }
 
-function PrintView({ev,onClose}){
+function PrintView({ev,onClose,docMeta={}}){
+  const dm={...DOC_META_DEFAULTS[ev?.type||''],...docMeta};
   const [pdfLoading,setPdfLoading]=useState(false);
   const [pdfError,setPdfError]=useState('');
   const [showPrintTip,setShowPrintTip]=useState(false);
@@ -928,6 +943,7 @@ function PrintView({ev,onClose}){
   const today2=()=>new Date().toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
 
   function handlePDF(){
+    const dm={...DOC_META_DEFAULTS[ev?.type||''],...(docMeta[ev?.type||'']||{})};
     const el=document.getElementById('bradken-print-doc');
     if(!el) return;
 
@@ -1239,7 +1255,7 @@ ${el.innerHTML}
         <td style={{border:'1px solid #C8D4E8',padding:'4px 6px',fontSize:10,fontWeight:700,background:'#005596',color:'#fff',width:'18%'}}>Aprobado por</td>
       </tr>
       <tr>
-        <C>1</C><C>30-Jun-26</C><C>Emisión inicial – formato Bradken Chilca.</C><C>avera</C><C>hramamurthi</C>
+        <C>{dm.rev||'1'}</C><C>{dm.fechaEmision||'30-Jun-26'}</C><C>{dm.clausula||'Emisión inicial – formato Bradken Chilca.'}</C><C>{dm.revisadoPor||'avera'}</C><C>{dm.aprobadoPor||'hramamurthi'}</C>
       </tr>
     </tbody></table>
 
@@ -1265,10 +1281,10 @@ ${el.innerHTML}
       </tr>
       <tr>
         {[
-          ['BKN Doc & Revisión',ev.docCode],
-          ['Fecha','30-Jun-26'],
-          ['Revisado por','avera'],
-          ['Aprobado por','hramamurthi'],
+          ['BKN Doc & Revisión',dm.bknDoc||ev.docCode],
+          ['Fecha',dm.fecha||'30-Jun-26'],
+          ['Revisado por',dm.revisadoPor||'avera'],
+          ['Aprobado por',dm.aprobadoPor||'hramamurthi'],
         ].map(([lbl,val],i)=>(
           <td key={i} style={{border:'1px solid #C8D8EC',padding:'6px 10px',verticalAlign:'top'}}>
             <span style={{fontSize:10,color:'#888'}}>{lbl}: </span>
@@ -1319,6 +1335,11 @@ export default function App(){
   const [planSaving,setPlanSaving]=useState(false);
   const [planMsg,setPlanMsg]=useState('');
   const [pendingReevals,setPendingReevals]=useState([]);
+  const [docMeta,setDocMeta]=useState({});       // {typeId: {bknDoc,fecha,revisadoPor,aprobadoPor,rev,fechaEmision,clausula}}
+  const [docMetaType,setDocMetaType]=useState(null);
+  const [docMetaForm,setDocMetaForm]=useState({});
+  const [docMetaSaving,setDocMetaSaving]=useState(false);
+  const [docMetaMsg,setDocMetaMsg]=useState('');
   const [pinInput,setPinInput]=useState('');
   const [pinError,setPinError]=useState('');
   const [pinVisible,setPinVisible]=useState(false);
@@ -1333,6 +1354,9 @@ export default function App(){
   const [evalPinAttempts,setEvalPinAttempts]=useState(0);
 
   // Fonts loaded via index.html
+  useEffect(()=>{
+    loadDocMeta().then(meta=>setDocMeta(meta));
+  },[]);
 
   function reset(){ setView('home'); setEv(null); setStep(0); setCodeIn(''); setErr(''); setPrinting(false); setEvalCategory(null); }
 
@@ -1395,6 +1419,31 @@ export default function App(){
     const all=await loadAllEvals();
     setAdminEvals(all);
     setAdminLoading(false);
+  }
+
+  async function loadDocMeta(){
+    try{
+      const{data}=await supabase.from('config').select('*').like('key','docmeta:%');
+      if(!data) return {};
+      const meta={};
+      data.forEach(row=>{
+        const typeId=row.key.replace('docmeta:','');
+        try{ meta[typeId]=JSON.parse(row.value); }catch(e){}
+      });
+      return meta;
+    }catch(e){ return {}; }
+  }
+
+  async function saveDocMeta(typeId,data){
+    setDocMetaSaving(true); setDocMetaMsg('');
+    try{
+      const{error}=await supabase.from('config').upsert({key:'docmeta:'+typeId,value:JSON.stringify(data),site:'global'});
+      if(!error){
+        setDocMeta(prev=>({...prev,[typeId]:data}));
+        setDocMetaMsg('✓ Metadatos actualizados correctamente.');
+      } else setDocMetaMsg('Error al guardar.');
+    }catch(e){ setDocMetaMsg('Error: '+e.message); }
+    setDocMetaSaving(false);
   }
 
   async function savePlan(evalId, planData){
@@ -1465,7 +1514,7 @@ export default function App(){
     setView('approve:done');
   }
 
-  if(printing&&ev) return <PrintView ev={ev} onClose={closePrint}/>;
+  if(printing&&ev) return <PrintView ev={ev} onClose={closePrint} docMeta={docMeta[ev.type]||{}}/>;
 
   const TypeIcon=({id})=>{
     const t=TYPES.find(x=>x.id===id);
@@ -2046,6 +2095,113 @@ export default function App(){
       </div>}
 
 
+
+      {/* ── ADMIN: CONTROL DE VERSIONES ── */}
+      {view==='admin:docmeta'&&(()=>{
+        const cats=[
+          {label:'Permisos de Trabajo de Alto Riesgo', types:TYPES.filter(t=>t.mode==='permiso')},
+          {label:'Licencias de Equipo y Vehículo', types:TYPES.filter(t=>t.mode==='licencia'&&!t.id.startsWith('bm'))},
+          {label:'Licencias para Fundir – Horno de Inducción (BM)', types:TYPES.filter(t=>t.id.startsWith('bm'))},
+        ];
+        const getMeta=(typeId)=>({...DOC_META_DEFAULTS[typeId],...(docMeta[typeId]||{})});
+        return <div>
+          <button style={s.back} onClick={()=>{setDocMetaType(null);setView('admin:list');}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            Historial
+          </button>
+          <h2 style={s.h1}>Control de Versiones de Documentos</h2>
+          <p style={{color:T2,fontSize:13,margin:'4px 0 20px'}}>Selecciona un formulario para actualizar sus metadatos ISO (BKN Doc, fechas, revisores). Los cambios aplican a todos los PDFs generados desde ese momento.</p>
+
+          {!docMetaType
+            ? cats.map(cat=><div key={cat.label} style={{marginBottom:20}}>
+                <div style={{fontSize:11,fontWeight:700,color:T3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:8}}>{cat.label}</div>
+                <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                  {cat.types.map(t=>{
+                    const m=getMeta(t.id);
+                    const isModified=!!docMeta[t.id];
+                    return <button key={t.id} onClick={()=>{
+                        setDocMetaType(t.id);
+                        setDocMetaForm({...m});
+                        setDocMetaMsg('');
+                      }}
+                      style={{...s.card,cursor:'pointer',display:'flex',alignItems:'center',gap:12,padding:'12px 16px',textAlign:'left',border:`1px solid ${isModified?'#C3D5F0':BD}`,background:isModified?BRANDL:SF}}>
+                      <div style={{width:36,height:36,background:t.color+'18',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',
+                        color:t.color,fontWeight:700,fontSize:t.icon.length>1?11:16,fontFamily:"'DM Mono',monospace",flexShrink:0,border:`1px solid ${t.color}25`}}>{t.icon}</div>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:13,fontWeight:600,color:TX}}>{t.label}</div>
+                        <div style={{fontSize:11,color:T2,marginTop:1}}>
+                          Rev. {m.rev} · {m.fecha} · {m.revisadoPor} / {m.aprobadoPor}
+                          {isModified&&<span style={{color:BRAND,marginLeft:8,fontWeight:600}}>• Modificado</span>}
+                        </div>
+                      </div>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T3} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>;
+                  })}
+                </div>
+              </div>)
+            : (()=>{
+                const t=TYPES.find(x=>x.id===docMetaType);
+                return <div>
+                  <button style={s.back} onClick={()=>{setDocMetaType(null);setDocMetaMsg('');}}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    Lista de formularios
+                  </button>
+                  <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16}}>
+                    <div style={{width:40,height:40,background:t.color+'18',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',
+                      color:t.color,fontWeight:700,fontSize:t.icon.length>1?11:16,fontFamily:"'DM Mono',monospace",border:`1px solid ${t.color}25`}}>{t.icon}</div>
+                    <div>
+                      <div style={{fontSize:15,fontWeight:600,color:TX}}>{t.label}</div>
+                      <div style={{fontSize:12,color:T2}}>{t.code}</div>
+                    </div>
+                  </div>
+
+                  <div style={{...s.card,display:'flex',flexDirection:'column',gap:14}}>
+                    <div style={{fontSize:12,fontWeight:700,color:BRAND,textTransform:'uppercase',letterSpacing:'0.05em',paddingBottom:8,borderBottom:`1px solid ${BD}`}}>
+                      Encabezado del documento (BKN Doc & Revisión)
+                    </div>
+                    {[
+                      ['bknDoc','BKN Doc & Revisión (código del documento)','TRG-F-008'],
+                      ['fecha','Fecha de revisión','30-Jun-26'],
+                      ['revisadoPor','Revisado por','avera'],
+                      ['aprobadoPor','Aprobado por','hramamurthi'],
+                    ].map(([f,lbl,ph])=><div key={f}>
+                      <label style={s.label}>{lbl}</label>
+                      <input style={s.input} value={docMetaForm[f]||''} placeholder={ph}
+                        onChange={e=>setDocMetaForm(prev=>({...prev,[f]:e.target.value}))}/>
+                    </div>)}
+
+                    <div style={{fontSize:12,fontWeight:700,color:BRAND,textTransform:'uppercase',letterSpacing:'0.05em',paddingBottom:8,borderBottom:`1px solid ${BD}`,marginTop:4}}>
+                      Tabla 1 – Resumen de la revisión
+                    </div>
+                    {[
+                      ['rev','Rev. (número de revisión)','1'],
+                      ['fechaEmision','Fecha de emisión','30-Jun-26'],
+                      ['clausula','Cláusula/Sección revisada y Lista de cambios','Emisión inicial – formato Bradken Chilca.'],
+                    ].map(([f,lbl,ph])=><div key={f}>
+                      <label style={s.label}>{lbl}</label>
+                      <input style={s.input} value={docMetaForm[f]||''} placeholder={ph}
+                        onChange={e=>setDocMetaForm(prev=>({...prev,[f]:e.target.value}))}/>
+                    </div>)}
+
+                    {docMetaMsg&&<p style={{fontSize:12,color:docMetaMsg.startsWith('✓')?G:R,margin:0}}>{docMetaMsg}</p>}
+
+                    <div style={{display:'flex',gap:10}}>
+                      <button style={{...s.btnPrimary}} disabled={docMetaSaving}
+                        onClick={()=>saveDocMeta(docMetaType,docMetaForm)}>
+                        {docMetaSaving?'Guardando...':'Guardar cambios'}
+                      </button>
+                      <button style={s.btn} onClick={()=>{
+                        setDocMetaForm({...DOC_META_DEFAULTS[docMetaType]});
+                        setDocMetaMsg('');
+                      }}>Restaurar valores por defecto</button>
+                    </div>
+                  </div>
+                </div>;
+              })()
+          }
+        </div>;
+      })()}
+
       {/* ── ADMIN: PLAN ── */}
       {view==='admin:plan'&&managingEv&&<div>
         <button style={s.back} onClick={()=>setView('admin:list')}>
@@ -2175,6 +2331,10 @@ export default function App(){
             <h2 style={{...s.h1,margin:0}}>Historial de Evaluaciones</h2>
           </div>
           <div style={{display:'flex',gap:8}}>
+            <button onClick={()=>{setDocMetaType(null);setDocMetaMsg('');setView('admin:docmeta');}}
+              style={{...s.btnSm,display:'flex',alignItems:'center',gap:4}}>
+              📋 Control de Versiones
+            </button>
             <button onClick={()=>{setChangingPin(c=>!c);setPinChangeMsg('');setNewPin('');setNewPinConfirm('');}}
               style={{...s.btnSm,display:'flex',alignItems:'center',gap:4}}>
               🔑 {changingPin?'Cancelar':'Cambiar PIN'}
