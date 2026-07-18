@@ -947,72 +947,61 @@ function PrintView({ev,onClose,docMeta={}}){
   const LBLBG='#4A6081';
   const today2=()=>new Date().toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
 
-  function handlePDF(){
-    const dm={...DOC_META_DEFAULTS[ev?.type||''],...(docMeta[ev?.type||'']||{})};
+  async function handlePDF(){
     const el=document.getElementById('bradken-print-doc');
-    if(!el) return;
-
-    // Get the Bradken logo base64 from the img tag already in the DOM
-    const logoImg=el.querySelector('img[alt="Bradken"]');
-    const logoSrc=logoImg?logoImg.src:'';
-
-    const docTitle=`${typeInfo?.label}${isLicencia?` — ${roleLabel} ${subtitle}`:` — Verificación de Competencia — ${roleLabel}`}`;
-    const html=`<!DOCTYPE html>
-<html lang="es"><head>
-<meta charset="utf-8">
-<title>VOC_${ev.type.toUpperCase()}_${(ev.participant.nombres||'')}_${ev.id}</title>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
-  body{font-family:Calibri,Arial,sans-serif;background:#fff;color:#111;padding:0}
-  .tip{background:#005596;color:#fff;padding:12px 18px;margin-bottom:14px;border-radius:0;display:flex;justify-content:space-between;align-items:center;font-size:13px}
-  .tip button{background:#fff;color:#005596;border:none;padding:6px 14px;border-radius:4px;font-weight:700;cursor:pointer;font-size:12px}
-  table{border-collapse:collapse;width:100%;margin-bottom:5px}
-  td{border:1px solid #C8D4E8;padding:4px 7px;font-size:10pt;vertical-align:top;line-height:1.4}
-  img{max-height:42px;object-fit:contain}
-  /* Page layout */
-  @page{size:A4 portrait;margin:8mm 10mm 8mm 10mm}
-  /* Elements hidden on screen */
-  .rh{display:none}
-  @media print{
-    .tip{display:none!important}
-    body{padding:0}
-  }
-  .rh-label{color:#265898;font-weight:700;font-size:7.5pt}
-  .pf-label{color:#265898;font-weight:700;font-size:7.5pt}
-</style>
-</head><body>
-<div class="tip">
-  <span>📄 Presiona <strong>Ctrl+P</strong> → activar <strong>☑ Gráficos en segundo plano</strong> → destino: <strong>Guardar como PDF</strong></span>
-  <button onclick="window.print()">🖨 Imprimir / PDF</button>
-</div>
-
-
-${el.innerHTML}
-</body></html>`;
-
+    if(!el){setPdfError('Contenido no encontrado.');return;}
+    setPdfLoading(true); setPdfError('');
     try{
-      // Approach 1: Blob URL download (user-initiated anchor click works in sandboxed iframes)
-      const blob=new Blob([html],{type:'text/html;charset=utf-8'});
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement('a');
-      a.href=url;
-      a.download=`Bradken_VOC_${ev.type.toUpperCase()}_${(ev.participant.nombres||'').replace(/\s+/g,'_')}_${ev.id}.html`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(()=>URL.revokeObjectURL(url),2000);
-    }catch(e){
-      // Approach 2: data URI fallback
-      try{
-        const a=document.createElement('a');
-        a.href='data:text/html;charset=utf-8,'+encodeURIComponent(html);
-        a.download=`Bradken_VOC_${ev.id}.html`;
-        a.click();
-      }catch(e2){
-        setShowPrintTip(true);
+      await new Promise((res,rej)=>{
+        if(window.html2canvas){res();return;}
+        const s=document.createElement('script');
+        s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+        s.onload=res; s.onerror=rej; document.head.appendChild(s);
+      });
+      await new Promise((res,rej)=>{
+        if(window.jspdf){res();return;}
+        const s=document.createElement('script');
+        s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        s.onload=res; s.onerror=rej; document.head.appendChild(s);
+      });
+      const canvas=await window.html2canvas(el,{
+        scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false,
+        windowWidth:el.scrollWidth,windowHeight:el.scrollHeight
+      });
+      const{jsPDF}=window.jspdf;
+      const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+      const pw=pdf.internal.pageSize.getWidth();
+      const ph=pdf.internal.pageSize.getHeight();
+      const margin=10;
+      const cw=pw-margin*2;
+      const ratio=cw/canvas.width;
+      const fullH=canvas.height*ratio;
+      const totalPages=Math.ceil(fullH/ph);
+      for(let p=0;p<totalPages;p++){
+        if(p>0) pdf.addPage();
+        const srcY=Math.floor((p*ph)/ratio);
+        const srcH=Math.min(Math.floor(ph/ratio),canvas.height-srcY);
+        if(srcH<=0) break;
+        const pc=document.createElement('canvas');
+        pc.width=canvas.width; pc.height=srcH;
+        pc.getContext('2d').drawImage(canvas,0,srcY,canvas.width,srcH,0,0,canvas.width,srcH);
+        pdf.addImage(pc.toDataURL('image/jpeg',0.92),'JPEG',margin,0,cw,srcH*ratio);
       }
+      const nom=`VOC_${(ev.type||'').toUpperCase()}_${(ev.participant.nombres||'').replace(/\s+/g,'_')}_${ev.id}.pdf`;
+      try{
+        pdf.save(nom);
+      }catch(e2){
+        const uri=pdf.output('datauristring');
+        const w=window.open('','_blank');
+        if(w){ w.location.href=uri; }
+        else{ const a=document.createElement('a'); a.href=uri; a.target='_blank'; a.click(); }
+      }
+    }catch(e){
+      setPdfError('Error al generar PDF: '+e.message);
     }
+    setPdfLoading(false);
   }
+
   const roleLabel=ev.mode==='licencia'?'Evaluación Práctica de Competencia':ev.role==='emisor'?'EMISOR / AUTORIZADOR':'EJECUTOR';
   // Only BM and BC types show their level code (BM1, BC3, etc.) as subtitle suffix; others show nothing
   const subtitle=(()=>{const icon=typeInfo?.icon||''; return /^(BM\d|BC\d)$/.test(icon)?icon:'';})();
