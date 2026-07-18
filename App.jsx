@@ -1450,6 +1450,11 @@ export default function App(){
   const [adminLoading,setAdminLoading]=useState(false);
   const [adminFilter,setAdminFilter]=useState({type:'',role:'',status:'',search:''});
   const [managingEv,setManagingEv]=useState(null);
+  const [editingEv,setEditingEv]=useState(null);
+  const [editForm,setEditForm]=useState({});
+  const [editSaving,setEditSaving]=useState(false);
+  const [editMsg,setEditMsg]=useState('');
+  const [confirmDelete,setConfirmDelete]=useState(null);
   const [planForm,setPlanForm]=useState({estado:'pendiente',fechaListo:'',observaciones:'',evaluadorTelefono:''});
   const [planSaving,setPlanSaving]=useState(false);
   const [planMsg,setPlanMsg]=useState('');
@@ -1563,6 +1568,23 @@ export default function App(){
       } else setDocMetaMsg('Error al guardar.');
     }catch(e){ setDocMetaMsg('Error: '+e.message); }
     setDocMetaSaving(false);
+  }
+
+  async function saveEdit(evalId, participant){
+    setEditSaving(true); setEditMsg('');
+    try{
+      const{error}=await supabase.from('evaluaciones').update({participant}).eq('id',evalId);
+      if(!error){ setEditMsg('✓ Datos actualizados correctamente.'); await refreshAdmin(); }
+      else setEditMsg('Error al guardar.');
+    }catch(e){ setEditMsg('Error: '+e.message); }
+    setEditSaving(false);
+  }
+
+  async function deleteEval(evalId){
+    try{
+      const{error}=await supabase.from('evaluaciones').delete().eq('id',evalId);
+      if(!error){ setConfirmDelete(null); await refreshAdmin(); setView('admin:list'); }
+    }catch(e){ console.error(e); }
   }
 
   async function savePlan(evalId, planData){
@@ -2321,6 +2343,64 @@ export default function App(){
         </div>;
       })()}
 
+
+      {/* ── ADMIN: EDIT ── */}
+      {view==='admin:edit'&&editingEv&&<div>
+        <button style={s.back} onClick={()=>setView('admin:list')}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Historial
+        </button>
+        <h2 style={s.h1}>Editar Datos del Participante</h2>
+        <div style={{...s.card,marginBottom:12,padding:'12px 16px',background:'#FFFBEB',borderColor:'#FCD34D'}}>
+          <div style={{fontSize:12,color:'#92400e'}}>
+            <b>Nota:</b> Solo se pueden editar los datos del participante. Los resultados C/NCA y la firma del evaluador no se modifican para preservar la integridad del registro.
+          </div>
+        </div>
+        <div style={{...s.card,display:'flex',flexDirection:'column',gap:14}}>
+          {[
+            ['nombres','Nombres'],['apellidos','Apellidos'],['cargo','Cargo / Puesto'],
+            ['fechaCurso','Fecha del curso'],['equipo','Marca / Modelo del equipo'],
+            ['colada','Número de Colada / N° Operación'],['turno','Turno'],
+            ['supNombre','Nombre del Supervisor'],['supFecha','Fecha del Supervisor'],
+            ['telefono','Número de celular (WhatsApp)'],
+          ].map(([field,label])=><div key={field}>
+            <label style={s.label}>{label}</label>
+            <input style={s.input} value={editForm[field]||''}
+              onChange={e=>{const v=e.target.value;setEditForm(prev=>({...prev,[field]:v}));}}/>
+          </div>)}
+          {editMsg&&<p style={{fontSize:12,color:editMsg.startsWith('✓')?G:R,margin:0}}>{editMsg}</p>}
+          <div style={{display:'flex',gap:10}}>
+            <button style={{...s.btnPrimary}} disabled={editSaving}
+              onClick={async()=>{
+                setEditSaving(true);
+                await saveEdit(editingEv.id,editForm);
+                setEditSaving(false);
+              }}>
+              {editSaving?'Guardando...':'Guardar cambios'}
+            </button>
+            <button style={s.btn} onClick={()=>setView('admin:list')}>Cancelar</button>
+          </div>
+        </div>
+      </div>}
+
+      {/* ── CONFIRM DELETE MODAL ── */}
+      {confirmDelete&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999}}>
+        <div style={{background:'#fff',borderRadius:14,padding:'24px',maxWidth:380,width:'90%',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
+          <div style={{fontSize:32,marginBottom:8,textAlign:'center'}}>⚠️</div>
+          <h3 style={{...s.h1,textAlign:'center',marginBottom:8}}>Eliminar evaluación</h3>
+          <p style={{fontSize:13,color:T2,textAlign:'center',marginBottom:20}}>
+            Se eliminará permanentemente el registro <b>{confirmDelete}</b> de Supabase. Esta acción no se puede deshacer.
+          </p>
+          <div style={{display:'flex',gap:10,justifyContent:'center'}}>
+            <button style={{...s.btnPrimary,background:'#DC2626'}}
+              onClick={()=>deleteEval(confirmDelete)}>
+              Sí, eliminar
+            </button>
+            <button style={s.btn} onClick={()=>setConfirmDelete(null)}>Cancelar</button>
+          </div>
+        </div>
+      </div>}
+
       {/* ── ADMIN: PLAN ── */}
       {view==='admin:plan'&&managingEv&&<PlanManager
         ev={managingEv}
@@ -2490,6 +2570,19 @@ export default function App(){
                           <button onClick={()=>{setEv(e);openPrint('admin');}}
                             style={{...s.btnSm,whiteSpace:'nowrap',color:'#005596',borderColor:'#005596',fontSize:10}}>
                             🖨 PDF
+                          </button>
+                          <button onClick={()=>{
+                              setEditingEv(e);
+                              setEditForm({...e.participant});
+                              setEditMsg('');
+                              setView('admin:edit');
+                            }}
+                            style={{...s.btnSm,whiteSpace:'nowrap',fontSize:10,color:'#92400e',borderColor:'#FCD34D',background:'#FFFBEB'}}>
+                            ✏ Editar
+                          </button>
+                          <button onClick={()=>setConfirmDelete(e.id)}
+                            style={{...s.btnSm,whiteSpace:'nowrap',fontSize:10,color:'#991B1B',borderColor:'#FCA5A5',background:'#FEF2F2'}}>
+                            🗑 Eliminar
                           </button>
                           {e.overallResult==='NCA'&&<button onClick={()=>{
                               setManagingEv(e);
