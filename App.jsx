@@ -1037,7 +1037,7 @@ function PrintView({ev,onClose,docMeta={}}){
       <div style={{display:'flex',gap:8,alignItems:'center'}}>
         <button onClick={handlePDF} style={{...s.btnPrimary,gap:6}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Descargar documento (.html)
+          Descargar documento PDF
         </button>
         <button onClick={onClose} style={s.btn}>← Volver</button>
       </div>
@@ -1054,14 +1054,19 @@ function PrintView({ev,onClose,docMeta={}}){
     {/* ══ PRINTABLE DOCUMENT CONTENT ══ */}
     <div id="bradken-print-doc" style={{background:'#fff',padding:'4px'}}>
 
-    {/* ══ PAGE 1 HEADER: Diagonal blue banner + logo floating in white space ══ */}
-    <div style={{position:'relative',width:'100%',height:76,marginBottom:8,overflow:'hidden'}}>
-      {/* Blue diagonal banner — dark left, lighter blue, diagonal cut to white on right */}
-      <div style={{
-        position:'absolute',top:0,left:0,width:'100%',height:'100%',
-        background:'linear-gradient(to right, #001a3a 0%, #003375 45%, #005596 78%)',
-        clipPath:'polygon(0 0, 80% 0, 68% 100%, 0 100%)',
-      }}/>
+    {/* ══ PAGE 1 HEADER: Diagonal blue banner + logo (SVG-based for html2canvas compatibility) ══ */}
+    <div style={{position:'relative',width:'100%',height:76,marginBottom:8}}>
+      <svg width="100%" height="76" viewBox="0 0 800 76" preserveAspectRatio="none"
+           style={{position:'absolute',top:0,left:0}}>
+        <defs>
+          <linearGradient id="hdrGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%"   stopColor="#001a3a"/>
+            <stop offset="45%"  stopColor="#003375"/>
+            <stop offset="78%"  stopColor="#005596"/>
+          </linearGradient>
+        </defs>
+        <polygon points="0,0 640,0 544,76 0,76" fill="url(#hdrGrad)"/>
+      </svg>
       {/* Bradken logo — floating in the white space on the right */}
       <div style={{
         position:'absolute',right:0,top:0,bottom:0,width:'28%',
