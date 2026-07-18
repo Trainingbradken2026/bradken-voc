@@ -2442,8 +2442,8 @@ export default function App(){
             <p style={{fontSize:12,color:'var(--text-muted)',marginBottom:8}}>
               {filtered.length} de {adminEvals.length} evaluaciones
             </p>
-            <div style={{border:'0.5px solid var(--border)',borderRadius:8,overflow:'hidden'}}>
-              <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+            <div style={{border:'0.5px solid var(--border)',borderRadius:8,overflowX:'auto'}}>
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:13,minWidth:680}}>
                 <thead>
                   <tr style={{background:'var(--surface-1)'}}>
                     {['Código','Participante','Tipo','Rol','Resultado','Estado','Fecha'].map(h=>
@@ -2485,10 +2485,10 @@ export default function App(){
                       <td style={{padding:'8px 10px',fontSize:12,color:'var(--text-secondary)',whiteSpace:'nowrap'}}>
                         {e.createdAt?new Date(e.createdAt).toLocaleDateString('es-PE'):'-'}
                       </td>
-                      <td style={{padding:'8px 10px'}}>
+                      <td style={{padding:'8px 6px',width:120}}>
                         <div style={{display:'flex',gap:4,flexDirection:'column'}}>
                           <button onClick={()=>{setEv(e);openPrint('admin');}}
-                            style={{...s.btnSm,whiteSpace:'nowrap',color:'#005596',borderColor:'#005596'}}>
+                            style={{...s.btnSm,whiteSpace:'nowrap',color:'#005596',borderColor:'#005596',fontSize:10}}>
                             🖨 PDF
                           </button>
                           {e.overallResult==='NCA'&&<button onClick={()=>{
@@ -2503,11 +2503,11 @@ export default function App(){
                               setPlanMsg('');
                               setView('admin:plan');
                             }}
-                            style={{...s.btnSm,whiteSpace:'nowrap',
+                            style={{...s.btnSm,whiteSpace:'nowrap',fontSize:10,
                               background:e.plan?.estado==='listo'?GBKG:e.plan?.estado==='en_progreso'?ABKG:RBKG,
                               color:e.plan?.estado==='listo'?G:e.plan?.estado==='en_progreso'?AM:R,
                               border:`1px solid ${e.plan?.estado==='listo'?GBD:e.plan?.estado==='en_progreso'?ABD:RBD}`}}>
-                            {e.plan?.estado==='listo'?'🟢 Plan listo':e.plan?.estado==='en_progreso'?'🟡 En progreso':'🔴 Gestionar plan'}
+                            {e.plan?.estado==='listo'?'🟢 Listo':e.plan?.estado==='en_progreso'?'🟡 En progreso':'🔴 Gestionar'}
                           </button>}
                         </div>
                       </td>
