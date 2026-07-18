@@ -1354,11 +1354,19 @@ function PlanManager({ev,form,setForm,saving,msg,onSave,onBack}){
             );
           })
     ),
-    ev.aiRec ? React.createElement('div',{style:{background:'#EBF2FD',border:'1px solid #C3D5F0',borderRadius:14,padding:'14px 16px',marginBottom:12}},
-      React.createElement('div',{style:{fontSize:13,fontWeight:600,color:BRAND,marginBottom:8}},'✦ Plan de Desarrollo de Competencias (generado por IA)'),
-      React.createElement('p',{style:{fontSize:13,lineHeight:1.7,color:TX,whiteSpace:'pre-wrap',margin:0}},ev.aiRec)
-    ) : React.createElement('div',{style:{background:'#F9FAFB',border:'1px solid '+BD,borderRadius:14,padding:'12px 16px',marginBottom:12}},
-      React.createElement('p',{style:{fontSize:12,color:T2,margin:0}},'No se generó plan de IA para esta evaluación.')
+    React.createElement('div',{style:{background:'#fff',border:'1px solid '+BD,borderRadius:14,padding:'14px 16px',marginBottom:12}},
+      React.createElement('div',{style:{fontSize:12,fontWeight:700,color:TX,marginBottom:8,textTransform:'uppercase',letterSpacing:'0.05em'}},'Plan de Desarrollo de Competencias'),
+      ev.aiRec
+        ? React.createElement('p',{style:{fontSize:13,lineHeight:1.7,color:TX,whiteSpace:'pre-wrap',margin:'0 0 10px'}},ev.aiRec)
+        : null,
+      React.createElement('label',{style:{fontSize:11,fontWeight:600,color:T3,textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6}},
+        ev.aiRec ? 'Ajustar o complementar el plan:' : 'Escribe el plan de desarrollo:'),
+      React.createElement('textarea',{
+        style:{border:'1px solid '+BD,borderRadius:8,padding:'8px 12px',fontSize:13,color:TX,width:'100%',background:'#fff',minHeight:120,resize:'vertical',fontFamily:'inherit',lineHeight:1.6},
+        value:form.planText||'',
+        placeholder:'Describe las actividades de refuerzo específicas para cada ítem NCA, la metodología recomendada (OJT, práctica supervisada, tutoría) y el plazo sugerido para re-evaluación...',
+        onChange:function(e){setForm(function(f){return {...f,planText:e.target.value};});}
+      })
     ),
     React.createElement('div',{style:{background:'#fff',border:'1px solid '+BD,borderRadius:14,padding:'16px',display:'flex',flexDirection:'column',gap:14}},
       React.createElement('h3',{style:{fontSize:16,fontWeight:600,color:TX,margin:'0 0 4px'}},'Estado del plan de desarrollo'),
@@ -2490,6 +2498,7 @@ export default function App(){
                                 fechaListo:e.plan?.fechaListo||'',
                                 observaciones:e.plan?.observaciones||'',
                                 evaluadorTelefono:e.plan?.evaluadorTelefono||'',
+                                planText:e.plan?.planText||'',
                               });
                               setPlanMsg('');
                               setView('admin:plan');
