@@ -2234,8 +2234,20 @@ export default function App(){
           }
         </div>
 
-        {/* Plan form */}
-        <div style={{...s.card,display:'flex',flexDirection:'column',gap:14}}>
+        {/* AI Development Plan */}
+        {managingEv.aiRec&&<div style={{...s.card,marginBottom:12,padding:'14px 16px',borderColor:'#C3D5F0',background:BRANDL+'40'}}>
+          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+            <div style={{width:28,height:28,background:BRAND,borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:13,flexShrink:0}}>✦</div>
+            <div>
+              <div style={{fontSize:13,fontWeight:600,color:BRAND}}>Plan de Desarrollo de Competencias</div>
+              <div style={{fontSize:11,color:T2}}>Generado automáticamente por IA al registrar el resultado NCA</div>
+            </div>
+          </div>
+          <p style={{fontSize:13,lineHeight:1.7,color:TX,whiteSpace:'pre-wrap',margin:0}}>{managingEv.aiRec}</p>
+        </div>}
+        {!managingEv.aiRec&&<div style={{...s.card,marginBottom:12,padding:'12px 16px',background:S2}}>
+          <p style={{fontSize:12,color:T2,margin:0}}>⚠ No se generó plan de IA para esta evaluación. Puede deberse a que los ítems NCA no pudieron procesarse en el momento del registro.</p>
+        </div>}
           <h3 style={{...s.h2,margin:'0 0 4px'}}>Estado del plan de desarrollo</h3>
 
           {/* Status selector */}
