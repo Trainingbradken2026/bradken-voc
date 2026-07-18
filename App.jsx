@@ -1065,7 +1065,7 @@ function PrintView({ev,onClose,docMeta={}}){
             <stop offset="78%"  stopColor="#005596"/>
           </linearGradient>
         </defs>
-        <polygon points="0,0 640,0 544,76 0,76" fill="url(#hdrGrad)"/>
+        <polygon points="0,0 560,0 450,76 0,76" fill="url(#hdrGrad)"/>
       </svg>
       {/* Bradken logo — floating in the white space on the right */}
       <div style={{
