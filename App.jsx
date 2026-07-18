@@ -1413,7 +1413,7 @@ function WANotifyButton({managingEv,planForm}){
   const tipo=TYPES.find(t=>t.id===managingEv.type)?.label||managingEv.type;
   const fechaF=new Date(planForm.fechaListo+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
   const evaluadorNombre=managingEv.evaluator?.nombre||'Evaluador';
-  const msg=encodeURIComponent('Hola '+evaluadorNombre+', el trabajador *'+nombre+'* puede ser re-evaluado en *'+tipo+'* a partir del *'+fechaF+'*. Plan autorizado por Training Bradken Chilca. Evaluacion: *'+managingEv.id+'* - bradken-voc.vercel.app');
+  const msg=encodeURIComponent('Hola '+evaluadorNombre+', el trabajador *'+nombre+'* puede ser re-evaluado en *'+tipo+'* a partir del *'+fechaF+'*. Plan autorizado por Training Bradken Chilca. Evaluacion: *'+managingEv.id+'* - https://bradken-voc.vercel.app');
   const phone=(planForm.evaluadorTelefono||'').replace(/\D/g,'');
   const waNum=phone.length>=9?('51'+phone.slice(-9)):'';
   return <a href={'https://wa.me/'+waNum+'?text='+msg} target="_blank" rel="noopener noreferrer"
@@ -2147,7 +2147,7 @@ export default function App(){
           const msg=encodeURIComponent(
             `Hola ${nombre}, tu evaluación de competencias *${tipo}* en Bradken Chilca ha sido registrada.\n\n` +
             `Tu código de acceso es: *${ev.id}*\n\n` +
-            `Ingresa a *bradken-voc.vercel.app*, selecciona "Soy Evaluado" e ingresa tu código para revisar y aprobar tu evaluación.\n\n` +
+            `Ingresa a https://bradken-voc.vercel.app, selecciona "Soy Evaluado" e ingresa tu código para revisar y aprobar tu evaluación.\n\n` +
             `— Equipo Training Bradken Chilca`
           );
           const phone=(ev.participant.telefono||'').replace(/\D/g,'');
