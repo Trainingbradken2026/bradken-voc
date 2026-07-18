@@ -2565,42 +2565,34 @@ export default function App(){
                       <td style={{padding:'8px 10px',fontSize:12,color:'var(--text-secondary)',whiteSpace:'nowrap'}}>
                         {e.createdAt?new Date(e.createdAt).toLocaleDateString('es-PE'):'-'}
                       </td>
-                      <td style={{padding:'8px 6px',width:120}}>
-                        <div style={{display:'flex',gap:4,flexDirection:'column'}}>
-                          <button onClick={()=>{setEv(e);openPrint('admin');}}
-                            style={{...s.btnSm,whiteSpace:'nowrap',color:'#005596',borderColor:'#005596',fontSize:10}}>
-                            🖨 PDF
+                      <td style={{padding:'8px 6px',width:100,whiteSpace:'nowrap'}}>
+                        <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
+                          <button title="Descargar PDF" onClick={()=>{setEv(e);openPrint('admin');}}
+                            style={{cursor:'pointer',background:'#EEF3FA',color:'#005596',border:'1px solid #C3D5F0',borderRadius:6,padding:'5px 7px',fontSize:11,fontWeight:600}}>
+                            🖨
                           </button>
-                          <button onClick={()=>{
-                              setEditingEv(e);
-                              setEditForm({...e.participant});
-                              setEditMsg('');
-                              setView('admin:edit');
+                          <button title="Editar datos del participante" onClick={()=>{
+                              setEditingEv(e);setEditForm({...e.participant});setEditMsg('');setView('admin:edit');
                             }}
-                            style={{...s.btnSm,whiteSpace:'nowrap',fontSize:10,color:'#92400e',borderColor:'#FCD34D',background:'#FFFBEB'}}>
-                            ✏ Editar
+                            style={{cursor:'pointer',background:'#FFFBEB',color:'#92400e',border:'1px solid #FCD34D',borderRadius:6,padding:'5px 7px',fontSize:11}}>
+                            ✏
                           </button>
-                          <button onClick={()=>setConfirmDelete(e.id)}
-                            style={{...s.btnSm,whiteSpace:'nowrap',fontSize:10,color:'#991B1B',borderColor:'#FCA5A5',background:'#FEF2F2'}}>
-                            🗑 Eliminar
+                          <button title="Eliminar evaluación" onClick={()=>setConfirmDelete(e.id)}
+                            style={{cursor:'pointer',background:'#FEF2F2',color:'#991B1B',border:'1px solid #FCA5A5',borderRadius:6,padding:'5px 7px',fontSize:11}}>
+                            🗑
                           </button>
-                          {e.overallResult==='NCA'&&<button onClick={()=>{
+                          {e.overallResult==='NCA'&&<button title="Gestionar plan de desarrollo" onClick={()=>{
                               setManagingEv(e);
-                              setPlanForm({
-                                estado:e.plan?.estado||'pendiente',
-                                fechaListo:e.plan?.fechaListo||'',
-                                observaciones:e.plan?.observaciones||'',
-                                evaluadorTelefono:e.plan?.evaluadorTelefono||'',
-                                planText:e.plan?.planText||'',
-                              });
-                              setPlanMsg('');
-                              setView('admin:plan');
+                              setPlanForm({estado:e.plan?.estado||'pendiente',fechaListo:e.plan?.fechaListo||'',
+                                observaciones:e.plan?.observaciones||'',evaluadorTelefono:e.plan?.evaluadorTelefono||'',
+                                planText:e.plan?.planText||''});
+                              setPlanMsg('');setView('admin:plan');
                             }}
-                            style={{...s.btnSm,whiteSpace:'nowrap',fontSize:10,
+                            style={{cursor:'pointer',whiteSpace:'nowrap',fontSize:10,fontWeight:600,borderRadius:6,padding:'5px 7px',
                               background:e.plan?.estado==='listo'?GBKG:e.plan?.estado==='en_progreso'?ABKG:RBKG,
                               color:e.plan?.estado==='listo'?G:e.plan?.estado==='en_progreso'?AM:R,
                               border:`1px solid ${e.plan?.estado==='listo'?GBD:e.plan?.estado==='en_progreso'?ABD:RBD}`}}>
-                            {e.plan?.estado==='listo'?'🟢 Listo':e.plan?.estado==='en_progreso'?'🟡 En progreso':'🔴 Gestionar'}
+                            {e.plan?.estado==='listo'?'🟢':e.plan?.estado==='en_progreso'?'🟡':'🔴'} Plan
                           </button>}
                         </div>
                       </td>
