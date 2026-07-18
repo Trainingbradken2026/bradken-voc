@@ -1312,6 +1312,112 @@ ${el.innerHTML}
 }
 
 
+
+
+function PlanManager({ev,form,setForm,saving,msg,onSave,onBack}){
+  const TX='#1A1A2E',T2='#6B7280',T3='#9CA3AF',R='#DC2626',G='#16A34A',AM='#D97706';
+  const BD='#E4E7EF',RBKG='#FEF2F2',GBKG='#F0FDF4',ABKG='#FFFBEB';
+  const BRAND='#005596',s={label:{fontSize:11,fontWeight:600,color:T3,textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6},
+    input:{border:'1px solid '+BD,borderRadius:8,padding:'8px 12px',fontSize:13,color:TX,width:'100%',background:'#fff'},
+    btnPrimary:{cursor:'pointer',background:BRAND,color:'#fff',border:'none',borderRadius:9,padding:'9px 18px',fontSize:13,fontWeight:600}};
+  
+  const tipo=TYPES.find(function(t){return t.id===ev.type;});
+  const ncaItems=(ev.domains||[]).flatMap(function(d){return (d.items||[]).filter(function(i){return i.result==='NCA';});});
+  
+  const statusList=[
+    {val:'pendiente',lbl:'Pendiente',col:R,bg:RBKG},
+    {val:'en_progreso',lbl:'En progreso',col:AM,bg:ABKG},
+    {val:'listo',lbl:'Listo para re-evaluar',col:G,bg:GBKG}
+  ];
+  
+  return React.createElement('div',null,
+    React.createElement('button',{style:{cursor:'pointer',border:'none',background:'none',color:T2,fontSize:13,padding:'5px 8px',display:'inline-flex',alignItems:'center',gap:6,borderRadius:7},onClick:onBack},'← Historial'),
+    React.createElement('h2',{style:{fontSize:22,fontWeight:700,color:TX,margin:'8px 0 16px'}},'Gestión del Plan de Desarrollo'),
+    React.createElement('div',{style:{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:14,padding:'14px 16px',marginBottom:12}},
+      React.createElement('div',{style:{fontSize:13,fontWeight:600,color:R,marginBottom:4}},'Evaluación con resultado NCA'),
+      React.createElement('div',{style:{fontSize:13,color:TX}},ev.participant.nombres,' ',ev.participant.apellidos,' · ',tipo&&tipo.label),
+      React.createElement('div',{style:{fontSize:12,color:T2,marginTop:2}},'Código: ',ev.id,' · Evaluador: ',ev.evaluator&&ev.evaluator.nombre,' · ',new Date(ev.createdAt).toLocaleDateString('es-PE'))
+    ),
+    React.createElement('div',{style:{background:'#fff',border:'1px solid '+BD,borderRadius:14,padding:'14px 16px',marginBottom:12}},
+      React.createElement('div',{style:{fontSize:12,fontWeight:700,color:TX,marginBottom:8,textTransform:'uppercase',letterSpacing:'0.05em'}},'Ítems con resultado NCA'),
+      ncaItems.length===0
+        ? React.createElement('div',{style:{fontSize:12,color:T2}},'No se encontraron ítems NCA.')
+        : ncaItems.map(function(item,idx){
+            return React.createElement('div',{key:idx,style:{display:'flex',gap:8,alignItems:'flex-start',padding:'5px 0',borderBottom:'1px solid '+BD}},
+              React.createElement('span',{style:{color:R,flexShrink:0,marginTop:1}},'✗'),
+              React.createElement('span',{style:{fontSize:12,color:TX,lineHeight:1.5}},item.text)
+            );
+          })
+    ),
+    ev.aiRec ? React.createElement('div',{style:{background:'#EBF2FD',border:'1px solid #C3D5F0',borderRadius:14,padding:'14px 16px',marginBottom:12}},
+      React.createElement('div',{style:{fontSize:13,fontWeight:600,color:BRAND,marginBottom:8}},'✦ Plan de Desarrollo de Competencias (generado por IA)'),
+      React.createElement('p',{style:{fontSize:13,lineHeight:1.7,color:TX,whiteSpace:'pre-wrap',margin:0}},ev.aiRec)
+    ) : React.createElement('div',{style:{background:'#F9FAFB',border:'1px solid '+BD,borderRadius:14,padding:'12px 16px',marginBottom:12}},
+      React.createElement('p',{style:{fontSize:12,color:T2,margin:0}},'No se generó plan de IA para esta evaluación.')
+    ),
+    React.createElement('div',{style:{background:'#fff',border:'1px solid '+BD,borderRadius:14,padding:'16px',display:'flex',flexDirection:'column',gap:14}},
+      React.createElement('h3',{style:{fontSize:16,fontWeight:600,color:TX,margin:'0 0 4px'}},'Estado del plan de desarrollo'),
+      React.createElement('div',null,
+        React.createElement('label',{style:s.label},'Estado actual'),
+        React.createElement('div',{style:{display:'flex',gap:10,marginTop:4}},
+          statusList.map(function(item){
+            var active=form.estado===item.val;
+            return React.createElement('button',{
+              key:item.val,
+              onClick:function(){setForm(function(f){return {...f,estado:item.val};});},
+              style:{flex:1,padding:'8px',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',
+                background:active?item.bg:'transparent',color:active?item.col:T2,
+                border:'1.5px solid '+(active?item.col:BD)}
+            },item.lbl);
+          })
+        )
+      ),
+      React.createElement('div',null,
+        React.createElement('label',{style:s.label},'Puede ser evaluado a partir de'),
+        React.createElement('input',{style:s.input,type:'date',value:form.fechaListo||'',
+          onChange:function(e){setForm(function(f){return {...f,fechaListo:e.target.value};});}}),
+        form.fechaListo&&React.createElement('p',{style:{fontSize:11,color:T2,marginTop:4}},
+          new Date(form.fechaListo+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'long',year:'numeric'}))
+      ),
+      React.createElement('div',null,
+        React.createElement('label',{style:s.label},'Observaciones de seguimiento'),
+        React.createElement('textarea',{style:{...s.input,height:80},value:form.observaciones||'',
+          placeholder:'Actividades completadas, comentarios del supervisor...',
+          onChange:function(e){setForm(function(f){return {...f,observaciones:e.target.value};});}})
+      ),
+      React.createElement('div',null,
+        React.createElement('label',{style:s.label},'Celular del evaluador (para WhatsApp)'),
+        React.createElement('input',{style:s.input,value:form.evaluadorTelefono||'',
+          placeholder:'987654321 (9 digitos)',maxLength:9,
+          onChange:function(e){setForm(function(f){return {...f,evaluadorTelefono:onlyDigits(e.target.value)};});}})
+      ),
+      msg&&React.createElement('p',{style:{fontSize:12,color:msg.startsWith('✓')?G:R,margin:0}},msg),
+      React.createElement('div',{style:{display:'flex',gap:10,flexWrap:'wrap'}},
+        React.createElement('button',{style:s.btnPrimary,disabled:saving,onClick:onSave},saving?'Guardando...':'Guardar cambios'),
+        React.createElement(WANotifyButton,{managingEv:ev,planForm:form})
+      )
+    )
+  );
+}
+
+function WANotifyButton({managingEv,planForm}){
+  if(!managingEv||planForm.estado!=='listo'||!planForm.fechaListo) return null;
+  const nombre=((managingEv.participant?.nombres||'')+' '+(managingEv.participant?.apellidos||'')).trim();
+  const tipo=TYPES.find(t=>t.id===managingEv.type)?.label||managingEv.type;
+  const fechaF=new Date(planForm.fechaListo+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const evaluadorNombre=managingEv.evaluator?.nombre||'Evaluador';
+  const msg=encodeURIComponent('Hola '+evaluadorNombre+', el trabajador *'+nombre+'* puede ser re-evaluado en *'+tipo+'* a partir del *'+fechaF+'*. Plan autorizado por Training Bradken Chilca. Evaluacion: *'+managingEv.id+'* - bradken-voc.vercel.app');
+  const phone=(planForm.evaluadorTelefono||'').replace(/\D/g,'');
+  const waNum=phone.length>=9?('51'+phone.slice(-9)):'';
+  return <a href={'https://wa.me/'+waNum+'?text='+msg} target="_blank" rel="noopener noreferrer"
+    style={{display:'inline-flex',alignItems:'center',gap:8,background:'#25D366',color:'#fff',
+      borderRadius:22,padding:'9px 18px',fontSize:13,fontWeight:600,textDecoration:'none'}}>
+    <span>💬</span> Notificar evaluador por WhatsApp
+  </a>;
+}
+
+
+function onlyDigits(s){return (s||'').split('').filter(function(ch){return ch>='0'&&ch<='9';}).join('');}
 export default function App(){
   const [view,setView]=useState('home');
   const [ev,setEv]=useState(null);
@@ -2203,138 +2309,19 @@ export default function App(){
       })()}
 
       {/* ── ADMIN: PLAN ── */}
-      {view==='admin:plan'&&managingEv&&<div>
-        <button style={s.back} onClick={()=>setView('admin:list')}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-          Historial
-        </button>
-        <h2 style={s.h1}>Gestión del Plan de Desarrollo</h2>
-        <div style={{...s.card,marginBottom:12,padding:'14px 16px',background:RBKG,borderColor:RBD}}>
-          <div style={{fontSize:13,fontWeight:600,color:R,marginBottom:4}}>Evaluación con resultado NCA</div>
-          <div style={{fontSize:13,color:TX}}>{managingEv.participant?.nombres} {managingEv.participant?.apellidos} · {TYPES.find(t=>t.id===managingEv.type)?.label}</div>
-          <div style={{fontSize:12,color:T2,marginTop:2}}>Código: {managingEv.id} · Evaluador: {managingEv.evaluator?.nombre} · {new Date(managingEv.createdAt).toLocaleDateString('es-PE')}</div>
-        </div>
-
-        {/* NCA items list */}
-        <div style={{...s.card,marginBottom:12,padding:'14px 16px'}}>
-          <div style={{fontSize:12,fontWeight:700,color:TX,marginBottom:8,textTransform:'uppercase',letterSpacing:'0.05em'}}>Ítems con resultado NCA</div>
-          {managingEv.domains?.flatMap(d=>d.items?.filter(i=>i.result==='NCA').map(i=>(
-            <div key={i.text} style={{display:'flex',gap:8,alignItems:'flex-start',padding:'5px 0',borderBottom:`1px solid ${BD}`}}>
-              <span style={{color:R,flexShrink:0,marginTop:1}}>✗</span>
-              <span style={{fontSize:12,color:TX,lineHeight:1.5}}>{i.text}</span>
-            </div>
-          ))).filter(Boolean).length===0
-            ? <div style={{fontSize:12,color:T2}}>No se encontraron ítems NCA.</div>
-            : managingEv.domains?.flatMap(d=>d.items?.filter(i=>i.result==='NCA').map((i,idx)=>(
-              <div key={idx} style={{display:'flex',gap:8,alignItems:'flex-start',padding:'5px 0',borderBottom:`1px solid ${BD}`}}>
-                <span style={{color:R,flexShrink:0,marginTop:1}}>✗</span>
-                <span style={{fontSize:12,color:TX,lineHeight:1.5}}>{i.text}</span>
-              </div>
-            )))
-          }
-        </div>
-
-        {/* AI Development Plan */}
-        {managingEv.aiRec&&<div style={{...s.card,marginBottom:12,padding:'14px 16px',borderColor:'#C3D5F0',background:BRANDL+'40'}}>
-          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
-            <div style={{width:28,height:28,background:BRAND,borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:13,flexShrink:0}}>✦</div>
-            <div>
-              <div style={{fontSize:13,fontWeight:600,color:BRAND}}>Plan de Desarrollo de Competencias</div>
-              <div style={{fontSize:11,color:T2}}>Generado automáticamente por IA al registrar el resultado NCA</div>
-            </div>
-          </div>
-          <p style={{fontSize:13,lineHeight:1.7,color:TX,whiteSpace:'pre-wrap',margin:0}}>{managingEv.aiRec}</p>
-        </div>}
-        {!managingEv.aiRec&&<div style={{...s.card,marginBottom:12,padding:'12px 16px',background:S2}}>
-          <p style={{fontSize:12,color:T2,margin:0}}>⚠ No se generó plan de IA para esta evaluación. Puede deberse a que los ítems NCA no pudieron procesarse en el momento del registro.</p>
-        </div>}
-          <h3 style={{...s.h2,margin:'0 0 4px'}}>Estado del plan de desarrollo</h3>
-
-          {/* Status selector */}
-          <div>
-            <label style={s.label}>Estado actual</label>
-            <div style={{display:'flex',gap:10,marginTop:4}}>
-              {[['pendiente','🔴 Pendiente',R,RBKG,RBD],['en_progreso','🟡 En progreso',AM,ABKG,ABD],['listo','🟢 Listo para re-evaluar',G,GBKG,GBD]].map(([val,lbl,col,bg,bd])=>(
-                <button key={val} onClick={()=>setPlanForm(f=>({...f,estado:val}))}
-                  style={{flex:1,padding:'8px',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',
-                    background:planForm.estado===val?bg:'transparent',
-                    color:planForm.estado===val?col:T2,
-                    border:`1.5px solid ${planForm.estado===val?col:BD}`}}>
-                  {lbl}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label style={s.label}>Puede ser evaluado a partir de</label>
-            <input style={s.input} type="date" value={planForm.fechaListo}
-              onChange={e=>setPlanForm(f=>({...f,fechaListo:e.target.value}))}/>
-            {planForm.fechaListo&&<p style={{fontSize:11,color:T2,marginTop:4}}>
-              📅 {new Date(planForm.fechaListo+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'long',year:'numeric'})}
-            </p>}
-          </div>
-
-          <div>
-            <label style={s.label}>Observaciones de seguimiento (Training)</label>
-            <textarea style={{...s.input,height:80}} value={planForm.observaciones}
-              onChange={e=>setPlanForm(f=>({...f,observaciones:e.target.value}))}
-              placeholder="Actividades completadas, comentarios del supervisor, condiciones especiales..."/>
-          </div>
-
-          <div>
-            <label style={s.label}>Celular del Evaluador (para notificación WhatsApp)</label>
-            <input style={s.input} value={planForm.evaluadorTelefono}
-              onChange={e=>setPlanForm(f=>({...f,evaluadorTelefono:e.target.value.replace(/\D/g,'')}))}
-              placeholder="987654321 (9 dígitos, sin código de país)" maxLength={9}/>
-          </div>
-
-          {planMsg&&<p style={{fontSize:12,color:planMsg.startsWith('✓')?G:R,margin:0}}>{planMsg}</p>}
-
-          <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
-            <button style={{...s.btnPrimary}} disabled={planSaving}
-              onClick={async()=>{
-                const planData={...planForm,updatedAt:new Date().toISOString(),
-                  evaluadorNombre:managingEv.evaluator?.nombre};
-                await savePlan(managingEv.id,planData);
-                setManagingEv(prev=>({...prev,plan:planData}));
-              }}>
-              {planSaving?'Guardando...':'Guardar cambios'}
-            </button>
-
-            {/* WhatsApp notification to evaluator */}
-            {planForm.estado==='listo'&&planForm.fechaListo&&(()=>{
-              const nombre=`${managingEv.participant?.nombres||''} ${managingEv.participant?.apellidos||''}`.trim();
-              const tipo=TYPES.find(t=>t.id===managingEv.type)?.label||managingEv.type;
-              const fechaF=new Date(planForm.fechaListo+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
-              const evaluadorNombre=managingEv.evaluator?.nombre||'Evaluador';
-              const msg=encodeURIComponent(
-                `Hola ${evaluadorNombre}, el trabajador *${nombre}* puede ser re-evaluado en *${tipo}* a partir del *${fechaF}*.
-
-` +
-                `Plan de desarrollo completado y autorizado por Training Bradken Chilca.
-` +
-                `Evaluación original: *${managingEv.id}*
-
-` +
-                `Ingresa a bradken-voc.vercel.app para registrar la re-evaluación.`
-              );
-              const phone=(planForm.evaluadorTelefono||'').replace(/\D/g,'');
-              const waNum=phone.length>=9?`51${phone.slice(-9)}`:'';
-              return <a href={`https://wa.me/${waNum}?text=${msg}`} target="_blank" rel="noopener noreferrer"
-                style={{display:'inline-flex',alignItems:'center',gap:8,background:'#25D366',color:'#fff',
-                  borderRadius:22,padding:'9px 18px',fontSize:13,fontWeight:600,textDecoration:'none'}}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z"/>
-                  <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.506 3.93 1.394 5.6L0 24l6.562-1.394C8.2 23.494 10.075 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.848 0-3.587-.49-5.092-1.348l-.362-.215-3.897.828.843-3.794-.234-.38C2.49 15.587 2 13.848 2 12 2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
-                </svg>
-                Notificar evaluador por WhatsApp
-              </a>;
-            })()}
-          </div>
-        </div>
-      </div>}
-
+      {view==='admin:plan'&&managingEv&&<PlanManager
+        ev={managingEv}
+        form={planForm}
+        setForm={setPlanForm}
+        saving={planSaving}
+        msg={planMsg}
+        onSave={async()=>{
+          const d={...planForm,updatedAt:new Date().toISOString(),evaluadorNombre:managingEv.evaluator?.nombre};
+          await savePlan(managingEv.id,d);
+          setManagingEv(function(p){return {...p,plan:d};});
+        }}
+        onBack={function(){setView('admin:list');}}
+      />}
       {/* ── ADMIN: LIST ── */}
       {view==='admin:list'&&<div>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
@@ -2592,7 +2579,7 @@ function ApproverView({ev,onApprove,onPrint,onBack}){
         <span style={{fontSize:13,lineHeight:1.6,color:item.result==='NCA'?R:TX}}>{item.text}</span>
       </div>)}
     </div>)}
-    {ev.aiRec&&<div style={{...s.card,marginBottom:12,borderColor:BD,background:BRANDL+'40'}}>
+    {ev.aiRec&&<div style={{...s.card,marginBottom:12,borderColor:BD,background:'#EBF2FD'}}>
       <div style={{fontWeight:600,fontSize:13,marginBottom:8,color:BRAND,display:'flex',alignItems:'center',gap:6}}><svg width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'><circle cx='12' cy='12' r='10'/><line x1='12' y1='8' x2='12' y2='12'/><line x1='12' y1='16' x2='12.01' y2='16'/></svg> Plan de desarrollo de competencias</div>
       <p style={{fontSize:13,lineHeight:1.7,color:'var(--text-secondary)',whiteSpace:'pre-wrap',margin:0}}>{ev.aiRec}</p>
     </div>}
