@@ -1314,6 +1314,11 @@ export default function App(){
   const [adminEvals,setAdminEvals]=useState([]);
   const [adminLoading,setAdminLoading]=useState(false);
   const [adminFilter,setAdminFilter]=useState({type:'',role:'',status:'',search:''});
+  const [managingEv,setManagingEv]=useState(null);
+  const [planForm,setPlanForm]=useState({estado:'pendiente',fechaListo:'',observaciones:'',evaluadorTelefono:''});
+  const [planSaving,setPlanSaving]=useState(false);
+  const [planMsg,setPlanMsg]=useState('');
+  const [pendingReevals,setPendingReevals]=useState([]);
   const [pinInput,setPinInput]=useState('');
   const [pinError,setPinError]=useState('');
   const [pinVisible,setPinVisible]=useState(false);
@@ -1337,10 +1342,7 @@ export default function App(){
     setView('admin:pin');
   }
 
-  function openEvaluador(){
-    setEvalPinInput('');setEvalPinError('');setEvalPinAttempts(0);setEvalPinVisible(false);
-    setView('eval:pin');
-  }
+
 
   async function verifyEvalPin(){
     const correct=await loadPin('evaluator_pin');
@@ -1393,6 +1395,33 @@ export default function App(){
     const all=await loadAllEvals();
     setAdminEvals(all);
     setAdminLoading(false);
+  }
+
+  async function savePlan(evalId, planData){
+    setPlanSaving(true); setPlanMsg('');
+    try{
+      const{error}=await supabase.from('evaluaciones').update({plan:planData}).eq('id',evalId);
+      if(!error){ setPlanMsg('✓ Guardado correctamente'); await refreshAdmin(); }
+      else setPlanMsg('Error al guardar.');
+    }catch(e){ setPlanMsg('Error: '+e.message); }
+    setPlanSaving(false);
+  }
+
+  async function loadPendingReevals(){
+    try{
+      const{data}=await supabase.from('evaluaciones').select('*')
+        .eq('overall_result','NCA').not('plan','is',null);
+      if(!data) return [];
+      return data.map(normalizeEval).filter(e=>e.plan?.estado==='listo');
+    }catch(e){ return []; }
+  }
+
+  async function openEvaluador(){
+    setEvalPinInput('');setEvalPinError('');setEvalPinAttempts(0);setEvalPinVisible(false);
+    // Pre-load pending reevals
+    const reevals=await loadPendingReevals();
+    setPendingReevals(reevals);
+    setView('eval:pin');
   }
 
   function upEv(fn){ setEv(prev=>{const n={...prev};fn(n);return n;}); }
@@ -1513,6 +1542,60 @@ export default function App(){
         </button>
       </div>}
 
+
+      {/* ── EVAL: REEVALS ── */}
+      {view==='eval:reevals'&&(()=>{
+        // Group by evaluator name alphabetically
+        const grouped={};
+        pendingReevals.forEach(e=>{
+          const evName=(e.evaluator?.nombre||'Sin evaluador').toUpperCase();
+          if(!grouped[evName]) grouped[evName]=[];
+          grouped[evName].push(e);
+        });
+        const sorted=Object.keys(grouped).sort();
+        return <div>
+          <button style={s.back} onClick={()=>setView('eval:type')}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            Categorías
+          </button>
+          <h2 style={s.h1}>Re-evaluaciones Autorizadas</h2>
+          <p style={{color:T2,fontSize:13,margin:'4px 0 20px'}}>Trabajadores con plan de desarrollo completado · organizados por evaluador</p>
+          {sorted.length===0
+            ? <div style={{...s.card,textAlign:'center',padding:'32px'}}>
+                <div style={{fontSize:32,marginBottom:8}}>🟢</div>
+                <p style={{color:T2}}>No hay re-evaluaciones pendientes.</p>
+              </div>
+            : sorted.map(evName=><div key={evName} style={{marginBottom:16}}>
+                <div style={{fontSize:11,fontWeight:700,color:T3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:8,padding:'0 4px'}}>
+                  {evName}
+                </div>
+                {grouped[evName].map(e=>{
+                  const tipo=TYPES.find(t=>t.id===e.type)?.label||e.type;
+                  const fechaF=e.plan?.fechaListo
+                    ? new Date(e.plan.fechaListo+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'})
+                    : '—';
+                  return <div key={e.id} style={{...s.card,padding:'14px 16px',marginBottom:8,border:`1px solid ${GBD}`,background:GBKG,display:'flex',alignItems:'center',gap:12}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:14,fontWeight:600,color:TX}}>{e.participant?.nombres} {e.participant?.apellidos}</div>
+                      <div style={{fontSize:12,color:T2,marginTop:2}}>{tipo} · Código original: {e.id}</div>
+                      <div style={{fontSize:12,color:G,marginTop:2,fontWeight:500}}>🟢 Puede evaluarse desde: {fechaF}</div>
+                      {e.plan?.observaciones&&<div style={{fontSize:11,color:T2,marginTop:4,fontStyle:'italic'}}>"{e.plan.observaciones}"</div>}
+                    </div>
+                    <button onClick={()=>{
+                        setEvalCategory(null);
+                        setView('eval:type');
+                      }}
+                      style={{...s.btnPrimary,fontSize:12,padding:'7px 14px',flexShrink:0}}>
+                      Iniciar re-evaluación →
+                    </button>
+                  </div>;
+                })}
+              </div>
+            )
+          }
+        </div>;
+      })()}
+
       {/* ── EVAL: PIN ── */}
       {view==='eval:pin'&&<div style={{maxWidth:360,margin:'48px auto'}}>
         <button style={s.back} onClick={reset}>
@@ -1601,6 +1684,16 @@ export default function App(){
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
             Inicio
           </button>
+          {pendingReevals.length>0&&<button onClick={()=>setView('eval:reevals')}
+            style={{...s.card,cursor:'pointer',display:'flex',alignItems:'center',gap:12,padding:'12px 16px',
+              marginBottom:16,border:`1.5px solid ${G}`,background:GBKG,textAlign:'left',width:'100%'}}>
+            <div style={{width:36,height:36,background:G,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:700,fontSize:16,flexShrink:0}}>{pendingReevals.length}</div>
+            <div>
+              <div style={{fontSize:14,fontWeight:600,color:G}}>Trabajadores listos para re-evaluación</div>
+              <div style={{fontSize:12,color:T2}}>Training autorizó su re-evaluación → Ver lista</div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={G} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft:'auto'}}><polyline points="9 18 15 12 9 6"/></svg>
+          </button>}
           <h2 style={s.h1}>Selecciona la categoría</h2>
           <p style={{color:T2,fontSize:13,margin:'4px 0 24px'}}>Elige la categoría para ver los tipos de evaluación disponibles</p>
           <div style={{display:'flex',flexDirection:'column',gap:14}}>
@@ -1952,6 +2045,128 @@ export default function App(){
         </div>
       </div>}
 
+
+      {/* ── ADMIN: PLAN ── */}
+      {view==='admin:plan'&&managingEv&&<div>
+        <button style={s.back} onClick={()=>setView('admin:list')}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Historial
+        </button>
+        <h2 style={s.h1}>Gestión del Plan de Desarrollo</h2>
+        <div style={{...s.card,marginBottom:12,padding:'14px 16px',background:RBKG,borderColor:RBD}}>
+          <div style={{fontSize:13,fontWeight:600,color:R,marginBottom:4}}>Evaluación con resultado NCA</div>
+          <div style={{fontSize:13,color:TX}}>{managingEv.participant?.nombres} {managingEv.participant?.apellidos} · {TYPES.find(t=>t.id===managingEv.type)?.label}</div>
+          <div style={{fontSize:12,color:T2,marginTop:2}}>Código: {managingEv.id} · Evaluador: {managingEv.evaluator?.nombre} · {new Date(managingEv.createdAt).toLocaleDateString('es-PE')}</div>
+        </div>
+
+        {/* NCA items list */}
+        <div style={{...s.card,marginBottom:12,padding:'14px 16px'}}>
+          <div style={{fontSize:12,fontWeight:700,color:TX,marginBottom:8,textTransform:'uppercase',letterSpacing:'0.05em'}}>Ítems con resultado NCA</div>
+          {managingEv.domains?.flatMap(d=>d.items?.filter(i=>i.result==='NCA').map(i=>(
+            <div key={i.text} style={{display:'flex',gap:8,alignItems:'flex-start',padding:'5px 0',borderBottom:`1px solid ${BD}`}}>
+              <span style={{color:R,flexShrink:0,marginTop:1}}>✗</span>
+              <span style={{fontSize:12,color:TX,lineHeight:1.5}}>{i.text}</span>
+            </div>
+          ))).filter(Boolean).length===0
+            ? <div style={{fontSize:12,color:T2}}>No se encontraron ítems NCA.</div>
+            : managingEv.domains?.flatMap(d=>d.items?.filter(i=>i.result==='NCA').map((i,idx)=>(
+              <div key={idx} style={{display:'flex',gap:8,alignItems:'flex-start',padding:'5px 0',borderBottom:`1px solid ${BD}`}}>
+                <span style={{color:R,flexShrink:0,marginTop:1}}>✗</span>
+                <span style={{fontSize:12,color:TX,lineHeight:1.5}}>{i.text}</span>
+              </div>
+            )))
+          }
+        </div>
+
+        {/* Plan form */}
+        <div style={{...s.card,display:'flex',flexDirection:'column',gap:14}}>
+          <h3 style={{...s.h2,margin:'0 0 4px'}}>Estado del plan de desarrollo</h3>
+
+          {/* Status selector */}
+          <div>
+            <label style={s.label}>Estado actual</label>
+            <div style={{display:'flex',gap:10,marginTop:4}}>
+              {[['pendiente','🔴 Pendiente',R,RBKG,RBD],['en_progreso','🟡 En progreso',AM,ABKG,ABD],['listo','🟢 Listo para re-evaluar',G,GBKG,GBD]].map(([val,lbl,col,bg,bd])=>(
+                <button key={val} onClick={()=>setPlanForm(f=>({...f,estado:val}))}
+                  style={{flex:1,padding:'8px',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',
+                    background:planForm.estado===val?bg:'transparent',
+                    color:planForm.estado===val?col:T2,
+                    border:`1.5px solid ${planForm.estado===val?col:BD}`}}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label style={s.label}>Puede ser evaluado a partir de</label>
+            <input style={s.input} type="date" value={planForm.fechaListo}
+              onChange={e=>setPlanForm(f=>({...f,fechaListo:e.target.value}))}/>
+            {planForm.fechaListo&&<p style={{fontSize:11,color:T2,marginTop:4}}>
+              📅 {new Date(planForm.fechaListo+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'long',year:'numeric'})}
+            </p>}
+          </div>
+
+          <div>
+            <label style={s.label}>Observaciones de seguimiento (Training)</label>
+            <textarea style={{...s.input,height:80}} value={planForm.observaciones}
+              onChange={e=>setPlanForm(f=>({...f,observaciones:e.target.value}))}
+              placeholder="Actividades completadas, comentarios del supervisor, condiciones especiales..."/>
+          </div>
+
+          <div>
+            <label style={s.label}>Celular del Evaluador (para notificación WhatsApp)</label>
+            <input style={s.input} value={planForm.evaluadorTelefono}
+              onChange={e=>setPlanForm(f=>({...f,evaluadorTelefono:e.target.value.replace(/\D/g,'')}))}
+              placeholder="987654321 (9 dígitos, sin código de país)" maxLength={9}/>
+          </div>
+
+          {planMsg&&<p style={{fontSize:12,color:planMsg.startsWith('✓')?G:R,margin:0}}>{planMsg}</p>}
+
+          <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+            <button style={{...s.btnPrimary}} disabled={planSaving}
+              onClick={async()=>{
+                const planData={...planForm,updatedAt:new Date().toISOString(),
+                  evaluadorNombre:managingEv.evaluator?.nombre};
+                await savePlan(managingEv.id,planData);
+                setManagingEv(prev=>({...prev,plan:planData}));
+              }}>
+              {planSaving?'Guardando...':'Guardar cambios'}
+            </button>
+
+            {/* WhatsApp notification to evaluator */}
+            {planForm.estado==='listo'&&planForm.fechaListo&&(()=>{
+              const nombre=`${managingEv.participant?.nombres||''} ${managingEv.participant?.apellidos||''}`.trim();
+              const tipo=TYPES.find(t=>t.id===managingEv.type)?.label||managingEv.type;
+              const fechaF=new Date(planForm.fechaListo+'T12:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
+              const evaluadorNombre=managingEv.evaluator?.nombre||'Evaluador';
+              const msg=encodeURIComponent(
+                `Hola ${evaluadorNombre}, el trabajador *${nombre}* puede ser re-evaluado en *${tipo}* a partir del *${fechaF}*.
+
+` +
+                `Plan de desarrollo completado y autorizado por Training Bradken Chilca.
+` +
+                `Evaluación original: *${managingEv.id}*
+
+` +
+                `Ingresa a bradken-voc.vercel.app para registrar la re-evaluación.`
+              );
+              const phone=(planForm.evaluadorTelefono||'').replace(/\D/g,'');
+              const waNum=phone.length>=9?`51${phone.slice(-9)}`:'';
+              return <a href={`https://wa.me/${waNum}?text=${msg}`} target="_blank" rel="noopener noreferrer"
+                style={{display:'inline-flex',alignItems:'center',gap:8,background:'#25D366',color:'#fff',
+                  borderRadius:22,padding:'9px 18px',fontSize:13,fontWeight:600,textDecoration:'none'}}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z"/>
+                  <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.506 3.93 1.394 5.6L0 24l6.562-1.394C8.2 23.494 10.075 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.848 0-3.587-.49-5.092-1.348l-.362-.215-3.897.828.843-3.794-.234-.38C2.49 15.587 2 13.848 2 12 2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+                </svg>
+                Notificar evaluador por WhatsApp
+              </a>;
+            })()}
+          </div>
+        </div>
+      </div>}
+
       {/* ── ADMIN: LIST ── */}
       {view==='admin:list'&&<div>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
@@ -2099,10 +2314,29 @@ export default function App(){
                         {e.createdAt?new Date(e.createdAt).toLocaleDateString('es-PE'):'-'}
                       </td>
                       <td style={{padding:'8px 10px'}}>
-                        <button onClick={()=>{setEv(e);openPrint('admin');}}
-                          style={{...s.btnSm,whiteSpace:'nowrap',color:BK,borderColor:BK}}>
-                          🖨 PDF
-                        </button>
+                        <div style={{display:'flex',gap:4,flexDirection:'column'}}>
+                          <button onClick={()=>{setEv(e);openPrint('admin');}}
+                            style={{...s.btnSm,whiteSpace:'nowrap',color:'#005596',borderColor:'#005596'}}>
+                            🖨 PDF
+                          </button>
+                          {e.overallResult==='NCA'&&<button onClick={()=>{
+                              setManagingEv(e);
+                              setPlanForm({
+                                estado:e.plan?.estado||'pendiente',
+                                fechaListo:e.plan?.fechaListo||'',
+                                observaciones:e.plan?.observaciones||'',
+                                evaluadorTelefono:e.plan?.evaluadorTelefono||'',
+                              });
+                              setPlanMsg('');
+                              setView('admin:plan');
+                            }}
+                            style={{...s.btnSm,whiteSpace:'nowrap',
+                              background:e.plan?.estado==='listo'?GBKG:e.plan?.estado==='en_progreso'?ABKG:RBKG,
+                              color:e.plan?.estado==='listo'?G:e.plan?.estado==='en_progreso'?AM:R,
+                              border:`1px solid ${e.plan?.estado==='listo'?GBD:e.plan?.estado==='en_progreso'?ABD:RBD}`}}>
+                            {e.plan?.estado==='listo'?'🟢 Plan listo':e.plan?.estado==='en_progreso'?'🟡 En progreso':'🔴 Gestionar plan'}
+                          </button>}
+                        </div>
                       </td>
                     </tr>;
                   })}
