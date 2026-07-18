@@ -2542,7 +2542,6 @@ export default function App(){
                       </td>
                       <td style={{padding:'8px 10px'}}>
                         <div style={{fontSize:12,fontWeight:500,color:TX}}>{e.evaluator?.nombre||'—'}</div>
-                        <div style={{fontSize:11,color:'var(--text-secondary)'}}>{e.evaluator?.fecha||''}</div>
                       </td>
                       <td style={{padding:'8px 10px'}}>
                         <span style={{display:'inline-flex',alignItems:'center',gap:4}}>
