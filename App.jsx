@@ -2526,7 +2526,7 @@ export default function App(){
               <table style={{width:'100%',borderCollapse:'collapse',fontSize:13,minWidth:680}}>
                 <thead>
                   <tr style={{background:'var(--surface-1)'}}>
-                    {['Código','Participante','Tipo','Rol','Resultado','Estado','Fecha'].map(h=>
+                    {['Código','Participante','Evaluador','Tipo','Rol','Resultado','Estado','Fecha'].map(h=>
                       <th key={h} style={{padding:'8px 10px',textAlign:'left',fontWeight:600,fontSize:12,color:'var(--text-secondary)',borderBottom:'0.5px solid var(--border)'}}>{h}</th>)}
                     <th style={{padding:'8px 10px',borderBottom:'0.5px solid var(--border)'}}/>
                   </tr>
@@ -2539,6 +2539,10 @@ export default function App(){
                       <td style={{padding:'8px 10px'}}>
                         <div style={{fontWeight:500}}>{e.participant?.nombres} {e.participant?.apellidos}</div>
                         <div style={{fontSize:11,color:'var(--text-secondary)'}}>{e.participant?.cargo}</div>
+                      </td>
+                      <td style={{padding:'8px 10px'}}>
+                        <div style={{fontSize:12,fontWeight:500,color:TX}}>{e.evaluator?.nombre||'—'}</div>
+                        <div style={{fontSize:11,color:'var(--text-secondary)'}}>{e.evaluator?.fecha||''}</div>
                       </td>
                       <td style={{padding:'8px 10px'}}>
                         <span style={{display:'inline-flex',alignItems:'center',gap:4}}>
