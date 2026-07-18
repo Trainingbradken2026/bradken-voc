@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabaseClient.js";
 
 // ── Portal design tokens (from Bradken Training Portal) ─────────────────
