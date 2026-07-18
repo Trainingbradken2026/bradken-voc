@@ -876,14 +876,19 @@ TYPES.forEach(t=>{
 async function getAI(ev){
   const nca=ev.domains.flatMap(d=>d.items.filter(i=>i.result==='NCA').map(i=>i.text));
   if(!nca.length) return '';
-  const t=TYPES.find(x=>x.id===ev.type)?.label||ev.type;
-  const r=ev.role==='emisor'?'Emisor / Autorizador':'Ejecutor';
-  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:
-      `Eres experto en formación de competencias para seguridad industrial en fundición. Un trabajador de Bradken Chilca (hornos de inducción) fue evaluado en ${t} como ${r}.\nÍtems con resultado NCA:\n${nca.map((x,i)=>`${i+1}. ${x}`).join('\n')}\nGenera un plan de desarrollo conciso (máx 200 palabras) con: actividades de refuerzo específicas, metodología recomendada (práctica supervisada, OJT, tutoría) y plazo sugerido para re-evaluación. Responde en español, directo y accionable. Sin viñetas excesivas.`}]})});
-  const data=await res.json();
-  return data.content?.[0]?.text||'';
+  try{
+    // Call Vercel API route (works in production, avoids CORS)
+    const res=await fetch('/api/generate-plan',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({type:ev.type,role:ev.role,items:nca})
+    });
+    if(!res.ok) return '';
+    const data=await res.json();
+    return data.plan||'';
+  }catch(e){
+    return '';
+  }
 }
 
 const s={
