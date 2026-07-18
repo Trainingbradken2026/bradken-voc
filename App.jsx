@@ -2565,8 +2565,8 @@ export default function App(){
                       <td style={{padding:'8px 10px',fontSize:12,color:'var(--text-secondary)',whiteSpace:'nowrap'}}>
                         {e.createdAt?new Date(e.createdAt).toLocaleDateString('es-PE'):'-'}
                       </td>
-                      <td style={{padding:'8px 6px',width:100,whiteSpace:'nowrap'}}>
-                        <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>
+                      <td style={{padding:'8px 6px',width:140,whiteSpace:'nowrap'}}>
+                        <div style={{display:'flex',gap:3,flexWrap:'nowrap',alignItems:'center'}}>
                           <button title="Descargar PDF" onClick={()=>{setEv(e);openPrint('admin');}}
                             style={{cursor:'pointer',background:'#EEF3FA',color:'#005596',border:'1px solid #C3D5F0',borderRadius:6,padding:'5px 7px',fontSize:11,fontWeight:600}}>
                             🖨
