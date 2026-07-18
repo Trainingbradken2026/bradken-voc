@@ -247,7 +247,7 @@ function initEval(type,role){
     docCode:t.code, color:t.color,
     participant:{nombres:'',apellidos:'',cargo:'',fechaCurso:'',
       prereqCheck:null,logbook:null,colada:'',turno:'',equipo:'',
-      supNombre:'',supFecha:'',
+      supNombre:'',supFecha:'',telefono:'',
     },
     evaluator:{nombre:'',fecha:today()},
     domains, overallResult:null, comments:'',
@@ -255,7 +255,7 @@ function initEval(type,role){
   };
 }
 function flatEval(d){return{id:d.id,type:d.type,role:d.role,mode:d.mode||'permiso',status:d.status||'draft',doc_code:d.docCode||'',color:d.color||'#005596',participant:d.participant||{},evaluator:d.evaluator||{},domains:d.domains||[],overall_result:d.overallResult||null,comments:d.comments||'',approval:d.approval||null,ai_rec:d.aiRec||'',evaluator_signed_at:d.evaluatorSignedAt||null,site:'chilca'};}
-function normalizeEval(row){return{id:row.id,type:row.type,role:row.role,mode:row.mode||'permiso',status:row.status||'draft',docCode:row.doc_code||'',color:row.color||'#005596',participant:row.participant||{nombres:'',apellidos:'',cargo:'',fechaCurso:'',prereqCheck:null,logbook:null,colada:'',turno:'',equipo:'',supNombre:'',supFecha:''},evaluator:row.evaluator||{nombre:'',fecha:''},domains:row.domains||[],overallResult:row.overall_result||null,comments:row.comments||'',approval:row.approval||null,aiRec:row.ai_rec||'',evaluatorSignedAt:row.evaluator_signed_at||null,createdAt:row.created_at||new Date().toISOString()};}
+function normalizeEval(row){return{id:row.id,type:row.type,role:row.role,mode:row.mode||'permiso',status:row.status||'draft',docCode:row.doc_code||'',color:row.color||'#005596',participant:row.participant||{nombres:'',apellidos:'',cargo:'',fechaCurso:'',prereqCheck:null,logbook:null,colada:'',turno:'',equipo:'',supNombre:'',supFecha:'',telefono:''},evaluator:row.evaluator||{nombre:'',fecha:''},domains:row.domains||[],overallResult:row.overall_result||null,comments:row.comments||'',approval:row.approval||null,aiRec:row.ai_rec||'',evaluatorSignedAt:row.evaluator_signed_at||null,createdAt:row.created_at||new Date().toISOString()};}
 async function saveEval(d){try{const{error}=await supabase.from('evaluaciones').upsert(flatEval(d));return!error;}catch(e){return false;}}
 async function loadEval(code){try{const{data,error}=await supabase.from('evaluaciones').select('*').eq('id',code.toUpperCase().trim()).single();if(error||!data)return null;return normalizeEval(data);}catch(e){return null;}}
 async function loadAllEvals(){try{const{data,error}=await supabase.from('evaluaciones').select('*').order('created_at',{ascending:false});if(error||!data)return[];return data.map(normalizeEval);}catch(e){return[];}}
@@ -1099,6 +1099,10 @@ ${el.innerHTML}
           />
         </C>
       </tr>
+      {ev.participant.telefono&&<tr>
+        <H s={{width:'22%'}}>Celular (WhatsApp)</H>
+        <C colSpan={3}>{ev.participant.telefono}</C>
+      </tr>}
       {prereqType&&<tr>
         <H s={{width:'22%'}}>{prereqType.replace('¿','').replace('?','').replace('(Obligatorio)','').trim()}</H>
         <C colSpan={3} s={{fontWeight:600,color:ev.participant.prereqCheck==='Sí'?'#166534':ev.participant.prereqCheck==='No'?'#991b1b':'#111'}}>
@@ -1693,7 +1697,7 @@ export default function App(){
         })()}
         <div style={{...s.card,display:'flex',flexDirection:'column',gap:14}}>
           <h3 style={{...s.h2,margin:'0 0 4px'}}>Datos del participante</h3>
-          {[['nombres','Nombres'],['apellidos','Apellidos'],['cargo','Cargo / Puesto'],['fechaCurso','Fecha del curso']].map(([f,l])=><div key={f}>
+          {[['nombres','Nombres'],['apellidos','Apellidos'],['cargo','Cargo / Puesto'],['fechaCurso','Fecha del curso'],['telefono','Número de celular (para WhatsApp)']].map(([f,l])=><div key={f}>
             <label style={s.label}>{l}</label>
             <input style={s.input} value={ev.participant[f]} onChange={e=>upEv(n=>{n.participant[f]=e.target.value;})} placeholder={l}/>
           </div>)}
@@ -1851,11 +1855,40 @@ export default function App(){
       {view==='eval:code'&&ev&&<div style={{textAlign:'center',padding:'24px 0'}}>
         <div style={{fontSize:40,marginBottom:12}}>✅</div>
         <h2 style={{...s.h1,marginBottom:4}}>Evaluación registrada</h2>
-        <p style={{color:'var(--text-secondary)',marginBottom:28}}>Comparte este código con {ev.participant.nombres} para que pueda revisar y aprobar su evaluación.</p>
-        <div style={{marginBottom:24}}>
-          <p style={{fontSize:13,color:'var(--text-muted)',marginBottom:8}}>Código de evaluación</p>
+        <p style={{color:T2,marginBottom:20}}>
+          Comparte este código con <b>{ev.participant.nombres} {ev.participant.apellidos}</b> para que pueda revisar y aprobar su evaluación.
+        </p>
+        <div style={{marginBottom:20}}>
+          <p style={{fontSize:13,color:T2,marginBottom:8}}>Código de evaluación</p>
           <div style={s.code}>{ev.id}</div>
         </div>
+
+        {/* WhatsApp share button */}
+        {(()=>{
+          const nombre=`${ev.participant.nombres||''} ${ev.participant.apellidos||''}`.trim();
+          const tipo=TYPES.find(x=>x.id===ev.type)?.label||ev.type;
+          const msg=encodeURIComponent(
+            `Hola ${nombre}, tu evaluación de competencias *${tipo}* en Bradken Chilca ha sido registrada.\n\n` +
+            `Tu código de acceso es: *${ev.id}*\n\n` +
+            `Ingresa a *bradken-voc.vercel.app*, selecciona "Soy Evaluado" e ingresa tu código para revisar y aprobar tu evaluación.\n\n` +
+            `— Equipo Training Bradken Chilca`
+          );
+          const phone=(ev.participant.telefono||'').replace(/\D/g,'');
+          const waNum=phone.length>=9?`51${phone.slice(-9)}`:'';
+          return <div style={{marginBottom:16}}>
+            <a href={`https://wa.me/${waNum}?text=${msg}`} target="_blank" rel="noopener noreferrer"
+              style={{display:'inline-flex',alignItems:'center',gap:8,background:'#25D366',color:'#fff',
+                borderRadius:22,padding:'10px 22px',fontSize:14,fontWeight:600,textDecoration:'none'}}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z"/>
+                <path d="M12 0C5.373 0 0 5.373 0 12c0 2.025.506 3.93 1.394 5.6L0 24l6.562-1.394C8.2 23.494 10.075 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.848 0-3.587-.49-5.092-1.348l-.362-.215-3.897.828.843-3.794-.234-.38C2.49 15.587 2 13.848 2 12 2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+              </svg>
+              Enviar código por WhatsApp
+            </a>
+            <p style={{fontSize:11,color:T3,marginTop:6}}>Abre WhatsApp con el mensaje listo · solo presiona Enviar</p>
+          </div>;
+        })()}
+
         <div style={{display:'flex',gap:10,justifyContent:'center',flexWrap:'wrap'}}>
           <button style={{...s.btn,borderRadius:22}} onClick={()=>{navigator.clipboard?.writeText(ev.id);setCopied(true);setTimeout(()=>setCopied(false),2000);}}>
             {copied?'✓ Copiado':'Copiar código'}
@@ -1868,12 +1901,12 @@ export default function App(){
             <div style={{width:24,height:24,background:'#1A5276',borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12}}>✦</div>
             <span style={{fontWeight:600,fontSize:14}}>Plan de desarrollo IA — ítems NCA</span>
           </div>
-          <p style={{fontSize:13,lineHeight:1.7,color:'var(--text-secondary)',whiteSpace:'pre-wrap',margin:0}}>{ev.aiRec}</p>
+          <p style={{fontSize:13,lineHeight:1.7,color:T2,whiteSpace:'pre-wrap',margin:0}}>{ev.aiRec}</p>
         </div>}
-        <div style={{...s.card,marginTop:16,textAlign:'left',background:'var(--bg-success)',borderColor:'var(--border-success)'}}>
+        <div style={{...s.card,marginTop:16,textAlign:'left'}}>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
             <ResultBadge r={ev.overallResult}/>
-            <span style={{fontSize:13,color:'var(--text-secondary)'}}>{ev.participant.nombres} {ev.participant.apellidos} · {ev.role==='emisor'?'Emisor':'Ejecutor'}</span>
+            <span style={{fontSize:13,color:T2}}>{ev.participant.nombres} {ev.participant.apellidos} · {ev.role==='emisor'?'Emisor':ev.mode==='licencia'?'Operador':'Ejecutor'}</span>
           </div>
         </div>
       </div>}
