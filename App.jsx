@@ -16,10 +16,10 @@ const DARK='#1C1C1C';
 
 const TYPES = [
   // ── Permisos de trabajo de alto riesgo ──────────────────────────────
-  { id:'alturas',  label:'Trabajo en Alturas',         sub:'Caídas · EPP · Andamios',        icon:'↑',   code:'TRG-F-008', color:BK,        mode:'permiso', xfields:['area']},
-  { id:'espacios', label:'Espacios Confinados',         sub:'Atmósfera · Rescate · LOTOTO',   icon:'⬡',   code:'TRG-F-009', color:'#5B2C6F', mode:'permiso', xfields:['area']},
-  { id:'caliente', label:'Trabajos en Caliente',        sub:'Incendio · Soldadura · Vigía',   icon:'◈',   code:'TRG-F-010', color:'#BA4A00', mode:'permiso', xfields:['area']},
-  { id:'lototo',   label:'LOTO / Bloqueo',             sub:'Energías · Candados · Tryout',   icon:'⊟',   code:'TRG-F-011', color:'#1A5276', mode:'permiso', xfields:['area']},
+  { id:'alturas',  label:'Trabajo en Alturas',         sub:'Caídas · EPP · Andamios',        icon:'↑',   code:'TRG-F-008', color:BK,        mode:'permiso', xfields:['area','turno']},
+  { id:'espacios', label:'Espacios Confinados',         sub:'Atmósfera · Rescate · LOTOTO',   icon:'⬡',   code:'TRG-F-009', color:'#5B2C6F', mode:'permiso', xfields:['area','turno']},
+  { id:'caliente', label:'Trabajos en Caliente',        sub:'Incendio · Soldadura · Vigía',   icon:'◈',   code:'TRG-F-010', color:'#BA4A00', mode:'permiso', xfields:['area','turno']},
+  { id:'lototo',   label:'LOTO / Bloqueo',             sub:'Energías · Candados · Tryout',   icon:'⊟',   code:'TRG-F-011', color:'#1A5276', mode:'permiso', xfields:['area','turno']},
   // ── Licencias de equipo / vehículo ──────────────────────────────────
   { id:'bc1',        label:'Grúa Puente BC1',            sub:'Licencia básica de operación',   icon:'BC1', code:'C09785-BC1', color:'#0F766E', xfields:['logbook','equipo','turno','supervisor'], mode:'licencia' },
   { id:'bc3',        label:'Grúa Puente BC3',            sub:'Metal líquido · Req: BC1 vigente', icon:'BC3', code:'C09785-BC3', color:'#0E7490', xfields:['logbook','equipo','turno','supervisor'], mode:'licencia', prereq:'¿Posee Licencia BC1 vigente? (Obligatorio)' },
