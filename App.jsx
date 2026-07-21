@@ -2567,6 +2567,7 @@ export default function App(){
           </select>
           <select value={adminFilter.role} onChange={e=>setAdminFilter(f=>({...f,role:e.target.value}))}>
             <option value=''>Todos los roles</option>
+            <option value='operador'>Operador</option>
             <option value='emisor'>Emisor</option>
             <option value='ejecutor'>Ejecutor</option>
           </select>
