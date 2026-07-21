@@ -16,10 +16,10 @@ const DARK='#1C1C1C';
 
 const TYPES = [
   // ── Permisos de trabajo de alto riesgo ──────────────────────────────
-  { id:'alturas',  label:'Trabajo en Alturas',         sub:'Caídas · EPP · Andamios',        icon:'↑',   code:'TRG-F-008', color:BK,        mode:'permiso' },
-  { id:'espacios', label:'Espacios Confinados',         sub:'Atmósfera · Rescate · LOTOTO',   icon:'⬡',   code:'TRG-F-009', color:'#5B2C6F', mode:'permiso' },
-  { id:'caliente', label:'Trabajos en Caliente',        sub:'Incendio · Soldadura · Vigía',   icon:'◈',   code:'TRG-F-010', color:'#BA4A00', mode:'permiso' },
-  { id:'lototo',   label:'LOTO / Bloqueo',             sub:'Energías · Candados · Tryout',   icon:'⊟',   code:'TRG-F-011', color:'#1A5276', mode:'permiso' },
+  { id:'alturas',  label:'Trabajo en Alturas',         sub:'Caídas · EPP · Andamios',        icon:'↑',   code:'TRG-F-008', color:BK,        mode:'permiso', xfields:['area']},
+  { id:'espacios', label:'Espacios Confinados',         sub:'Atmósfera · Rescate · LOTOTO',   icon:'⬡',   code:'TRG-F-009', color:'#5B2C6F', mode:'permiso', xfields:['area']},
+  { id:'caliente', label:'Trabajos en Caliente',        sub:'Incendio · Soldadura · Vigía',   icon:'◈',   code:'TRG-F-010', color:'#BA4A00', mode:'permiso', xfields:['area']},
+  { id:'lototo',   label:'LOTO / Bloqueo',             sub:'Energías · Candados · Tryout',   icon:'⊟',   code:'TRG-F-011', color:'#1A5276', mode:'permiso', xfields:['area']},
   // ── Licencias de equipo / vehículo ──────────────────────────────────
   { id:'bc1',        label:'Grúa Puente BC1',            sub:'Licencia básica de operación',   icon:'BC1', code:'C09785-BC1', color:'#0F766E', xfields:['logbook','equipo','turno','supervisor'], mode:'licencia' },
   { id:'bc3',        label:'Grúa Puente BC3',            sub:'Metal líquido · Req: BC1 vigente', icon:'BC3', code:'C09785-BC3', color:'#0E7490', xfields:['logbook','equipo','turno','supervisor'], mode:'licencia', prereq:'¿Posee Licencia BC1 vigente? (Obligatorio)' },
@@ -246,7 +246,7 @@ function initEval(type,role){
     id:genCode(), type, role:effectiveRole, mode:mode, status:'draft',
     docCode:t.code, color:t.color,
     participant:{nombres:'',apellidos:'',cargo:'',fechaCurso:'',
-      prereqCheck:null,logbook:null,colada:'',turno:'',equipo:'',
+      prereqCheck:null,logbook:null,colada:'',turno:'',equipo:'',area:'',
       supNombre:'',supFecha:'',telefono:'',
     },
     evaluator:{nombre:'',fecha:today()},
@@ -255,7 +255,7 @@ function initEval(type,role){
   };
 }
 function flatEval(d){return{id:d.id,type:d.type,role:d.role,mode:d.mode||'permiso',status:d.status||'draft',doc_code:d.docCode||'',color:d.color||'#005596',participant:d.participant||{},evaluator:d.evaluator||{},domains:d.domains||[],overall_result:d.overallResult||null,comments:d.comments||'',approval:d.approval||null,ai_rec:d.aiRec||'',evaluator_signed_at:d.evaluatorSignedAt||null,site:'chilca'};}
-function normalizeEval(row){return{id:row.id,type:row.type,role:row.role,mode:row.mode||'permiso',status:row.status||'draft',docCode:row.doc_code||'',color:row.color||'#005596',participant:row.participant||{nombres:'',apellidos:'',cargo:'',fechaCurso:'',prereqCheck:null,logbook:null,colada:'',turno:'',equipo:'',supNombre:'',supFecha:'',telefono:''},evaluator:row.evaluator||{nombre:'',fecha:''},domains:row.domains||[],overallResult:row.overall_result||null,comments:row.comments||'',approval:row.approval||null,aiRec:row.ai_rec||'',evaluatorSignedAt:row.evaluator_signed_at||null,createdAt:row.created_at||new Date().toISOString(),plan:row.plan||null};}
+function normalizeEval(row){return{id:row.id,type:row.type,role:row.role,mode:row.mode||'permiso',status:row.status||'draft',docCode:row.doc_code||'',color:row.color||'#005596',participant:row.participant||{nombres:'',apellidos:'',cargo:'',fechaCurso:'',prereqCheck:null,logbook:null,colada:'',turno:'',equipo:'',supNombre:'',supFecha:'',telefono:'',area:''},evaluator:row.evaluator||{nombre:'',fecha:''},domains:row.domains||[],overallResult:row.overall_result||null,comments:row.comments||'',approval:row.approval||null,aiRec:row.ai_rec||'',evaluatorSignedAt:row.evaluator_signed_at||null,createdAt:row.created_at||new Date().toISOString(),plan:row.plan||null};}
 async function saveEval(d){try{const{error}=await supabase.from('evaluaciones').upsert(flatEval(d));return!error;}catch(e){return false;}}
 async function loadEval(code){try{const{data,error}=await supabase.from('evaluaciones').select('*').eq('id',code.toUpperCase().trim()).single();if(error||!data)return null;return normalizeEval(data);}catch(e){return null;}}
 async function loadAllEvals(){try{const{data,error}=await supabase.from('evaluaciones').select('*').order('created_at',{ascending:false});if(error||!data)return[];return data.map(normalizeEval);}catch(e){return[];}}
@@ -1131,7 +1131,7 @@ function PrintView({ev,onClose,docMeta={}}){
       <tr><Sec colSpan={4}>Resumen de la Evaluación</Sec></tr>
       <tr>
         <H s={{width:'22%'}}>{ev.participant.colada?'Número de Colada / N° Operación':isLicencia?'Tipo / Modelo del Equipo':'Área / Tarea observada'}</H>
-        <C>{ev.participant.colada||ev.participant.equipo||''}</C>
+        <C>{ev.participant.colada||ev.participant.equipo||ev.participant.area||''}</C>
         <H s={{width:'12%'}}>Turno</H>
         <C>{ev.participant.turno
           ?<span>
@@ -1439,7 +1439,7 @@ export default function App(){
   const [evalCategory,setEvalCategory]=useState(null); // null | 'permiso' | 'licencia' | 'bm'
 
   function openPrint(fromView){ setPrintFrom(fromView); setPrinting(true); }
-  function closePrint(){ setPrinting(false); setView(printFrom==='admin'?'admin:list':printFrom); }
+  function closePrint(){ setPrinting(false); setView(printFrom==='admin'?'admin:list':printFrom==='admin:forms'?'admin:forms':printFrom); }
   const [adminEvals,setAdminEvals]=useState([]);
   const [adminLoading,setAdminLoading]=useState(false);
   const [adminFilter,setAdminFilter]=useState({type:'',role:'',status:'',search:''});
@@ -1994,6 +1994,12 @@ export default function App(){
           {(()=>{
             const xf=TYPES.find(x=>x.id===ev.type)?.xfields||[];
             return <>
+              {xf.includes('area')&&<div>
+                <label style={s.label}>Área / Tarea observada</label>
+                <input style={s.input} value={ev.participant.area||''}
+                  onChange={e=>upEv(n=>{n.participant.area=e.target.value;})}
+                  placeholder="Ej: Fachada norte nivel 3, andamio área de mantenimiento..."/>
+              </div>}
               {xf.includes('equipo')&&<div>
                 <label style={s.label}>Marca / Modelo del equipo evaluado</label>
                 <input style={s.input} value={ev.participant.equipo}
@@ -2232,6 +2238,64 @@ export default function App(){
 
 
       {/* ── ADMIN: CONTROL DE VERSIONES ── */}
+
+      {/* ── ADMIN: FORMS ── */}
+      {view==='admin:forms'&&<div>
+        <button style={s.back} onClick={()=>setView('admin:list')}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Historial
+        </button>
+        <h2 style={s.h1}>Formularios</h2>
+        <p style={{color:T2,fontSize:13,margin:'4px 0 20px'}}>Vista previa de todos los formatos en blanco. Haz clic en cualquiera para previsualizarlo.</p>
+        {[
+          {label:'Permisos de Trabajo de Alto Riesgo', types:TYPES.filter(t=>t.mode==='permiso')},
+          {label:'Licencias de Equipo y Vehículo', types:TYPES.filter(t=>t.mode==='licencia'&&!t.id.startsWith('bm'))},
+          {label:'Licencias para Fundir – Horno de Inducción (BM)', types:TYPES.filter(t=>t.id.startsWith('bm'))},
+        ].map(cat=><div key={cat.label} style={{marginBottom:20}}>
+          <div style={{fontSize:11,fontWeight:700,color:T3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:10}}>{cat.label}</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+            {cat.types.map(t=><button key={t.id} onClick={()=>{
+                // Build blank eval for preview
+                const role=t.mode==='licencia'?'operador':'emisor';
+                const compData=(t.mode==='licencia'?COMP_LIC:COMP_PER)[t.id];
+                const roleData=compData?compData[role]||compData[Object.keys(compData)[0]]:[];
+                const blankDomains=roleData.map(d=>({
+                  k:d.k, label:d.label, sub:d.sub||'',
+                  items:(d.items||[]).map(text=>({text,result:null}))
+                }));
+                const blankEv={
+                  id:'PREVIEW', type:t.id, role, mode:t.mode,
+                  status:'preview', docCode:t.code, color:t.color,
+                  participant:{nombres:'',apellidos:'',cargo:'',fechaCurso:'',
+                    prereqCheck:null,logbook:null,colada:'',turno:'',equipo:'',
+                    area:'',supNombre:'',supFecha:'',telefono:''},
+                  evaluator:{nombre:'',fecha:''},
+                  domains:blankDomains,
+                  overallResult:null, comments:'', approval:null,
+                  aiRec:'', evaluatorSignedAt:null,
+                  createdAt:new Date().toISOString()
+                };
+                setEv(blankEv);
+                openPrint('admin:forms');
+              }}
+              style={{...s.card,cursor:'pointer',display:'flex',alignItems:'center',gap:12,
+                padding:'12px 14px',textAlign:'left',border:`1px solid ${BD}`,transition:'all .15s'}}
+              onMouseOver={e=>{e.currentTarget.style.borderColor=t.color;e.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,.08)';}}
+              onMouseOut={e=>{e.currentTarget.style.borderColor=BD;e.currentTarget.style.boxShadow=SH;}}>
+              <div style={{width:38,height:38,background:t.color+'18',borderRadius:8,display:'flex',
+                alignItems:'center',justifyContent:'center',color:t.color,fontWeight:700,
+                fontSize:t.icon.length>1?11:17,fontFamily:"'DM Mono',monospace",
+                border:`1px solid ${t.color}25`,flexShrink:0}}>{t.icon}</div>
+              <div>
+                <div style={{fontSize:13,fontWeight:600,color:TX,lineHeight:1.3}}>{t.label}</div>
+                <div style={{fontSize:10,color:T3,marginTop:2,fontFamily:"'DM Mono',monospace"}}>{t.code}</div>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T3} strokeWidth="2" style={{marginLeft:'auto',flexShrink:0}}><polyline points="9 18 15 12 9 6"/></svg>
+            </button>)}
+          </div>
+        </div>)}
+      </div>}
+
       {view==='admin:docmeta'&&(()=>{
         const cats=[
           {label:'Permisos de Trabajo de Alto Riesgo', types:TYPES.filter(t=>t.mode==='permiso')},
@@ -2417,6 +2481,10 @@ export default function App(){
             <h2 style={{...s.h1,margin:0}}>Historial de Evaluaciones</h2>
           </div>
           <div style={{display:'flex',gap:8}}>
+            <button onClick={()=>setView('admin:forms')}
+              style={{...s.btnSm,display:'flex',alignItems:'center',gap:4}}>
+              📄 Formularios
+            </button>
             <button onClick={()=>{setDocMetaType(null);setDocMetaMsg('');setView('admin:docmeta');}}
               style={{...s.btnSm,display:'flex',alignItems:'center',gap:4}}>
               📋 Control de Versiones
