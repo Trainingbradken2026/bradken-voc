@@ -2257,12 +2257,19 @@ export default function App(){
             {cat.types.map(t=><button key={t.id} onClick={()=>{
                 // Build blank eval for preview
                 const role=t.mode==='licencia'?'operador':'emisor';
-                const compData=(t.mode==='licencia'?COMP_LIC:COMP_PER)[t.id];
-                const roleData=compData?compData[role]||compData[Object.keys(compData)[0]]:[];
-                const blankDomains=roleData.map(d=>({
-                  k:d.k, label:d.label, sub:d.sub||'',
-                  items:(d.items||[]).map(text=>({text,result:null}))
-                }));
+                let blankDomains;
+                if(t.mode==='licencia'){
+                  const secs=COMP_LIC[t.id]?.operador||[];
+                  blankDomains=secs.map(sec=>({
+                    k:sec.k, label:sec.label, sub:sec.sub||'',
+                    items:sec.items.map(text=>({text,result:null}))
+                  }));
+                } else {
+                  blankDomains=DOM.map((d,i)=>({
+                    ...d,
+                    items:(COMP[t.id]?.[role]?.[i]||[]).map(text=>({text,result:null}))
+                  }));
+                }
                 const blankEv={
                   id:'PREVIEW', type:t.id, role, mode:t.mode,
                   status:'preview', docCode:t.code, color:t.color,
