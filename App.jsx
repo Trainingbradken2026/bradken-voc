@@ -1130,9 +1130,9 @@ function PrintView({ev,onClose,docMeta={}}){
     <table style={{width:'100%',borderCollapse:'collapse',marginBottom:4}}><tbody>
       <tr><Sec colSpan={4}>Resumen de la Evaluación</Sec></tr>
       <tr>
-        <H s={{width:'22%'}}>{ev.participant.colada?'Número de Colada / N° Operación':isLicencia?'Tipo / Modelo del Equipo':'Área / Tarea observada'}</H>
-        <C>{ev.participant.colada||ev.participant.equipo||ev.participant.area||''}</C>
-        <H s={{width:'12%'}}>Turno</H>
+        <H s={{width:'25%'}}>{ev.participant.colada?'Número de Colada / N° Operación':isLicencia?'Tipo / Modelo del Equipo':'Área / Tarea observada'}</H>
+        <C s={{width:'45%'}}>{ev.participant.colada||ev.participant.equipo||ev.participant.area||''}</C>
+        <H s={{width:'8%'}}>Turno</H>
         <C>{ev.participant.turno
           ?<span>
             <span style={{marginRight:8,fontWeight:ev.participant.turno==='Mañana'?700:400}}>{ev.participant.turno==='Mañana'?'☑':'☐'} Mañana</span>
@@ -2254,9 +2254,11 @@ export default function App(){
         ].map(cat=><div key={cat.label} style={{marginBottom:20}}>
           <div style={{fontSize:11,fontWeight:700,color:T3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:10}}>{cat.label}</div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-            {cat.types.map(t=><button key={t.id} onClick={()=>{
+            {cat.types.flatMap(t=>{
+              // For permisos show both roles; for licencias show one (operador)
+              const roles=t.mode==='licencia'?['operador']:['emisor','ejecutor'];
+              return roles.map(role=><button key={t.id+'-'+role} onClick={()=>{
                 // Build blank eval for preview
-                const role=t.mode==='licencia'?'operador':'emisor';
                 let blankDomains;
                 if(t.mode==='licencia'){
                   const secs=COMP_LIC[t.id]?.operador||[];
@@ -2270,6 +2272,7 @@ export default function App(){
                     items:(COMP[t.id]?.[role]?.[i]||[]).map(text=>({text,result:null}))
                   }));
                 }
+                const roleLbl=t.mode!=='licencia'?(role==='emisor'?'EMISOR / AUTORIZADOR':'EJECUTOR'):'';
                 const blankEv={
                   id:'PREVIEW', type:t.id, role, mode:t.mode,
                   status:'preview', docCode:t.code, color:t.color,
@@ -2295,10 +2298,11 @@ export default function App(){
                 border:`1px solid ${t.color}25`,flexShrink:0}}>{t.icon}</div>
               <div>
                 <div style={{fontSize:13,fontWeight:600,color:TX,lineHeight:1.3}}>{t.label}</div>
-                <div style={{fontSize:10,color:T3,marginTop:2,fontFamily:"'DM Mono',monospace"}}>{t.code}</div>
+                {t.mode!=='licencia'&&<div style={{fontSize:10,fontWeight:600,color:t.color,marginTop:2}}>{role==='emisor'?'Emisor / Autorizador':'Ejecutor'}</div>}
+                <div style={{fontSize:10,color:T3,marginTop:1,fontFamily:"'DM Mono',monospace"}}>{t.code}</div>
               </div>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T3} strokeWidth="2" style={{marginLeft:'auto',flexShrink:0}}><polyline points="9 18 15 12 9 6"/></svg>
-            </button>)}
+            </button>);})}
           </div>
         </div>)}
       </div>}
