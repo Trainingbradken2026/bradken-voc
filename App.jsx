@@ -1224,11 +1224,31 @@ function PrintView({ev,onClose,docMeta={}}){
       <tr><H>Retroalimentación</H><C colSpan={3} s={{lineHeight:1.7,minHeight:36}}>{ev.comments||''}</C></tr>
     </tbody></table>
 
-    {/* ── PLAN DE DESARROLLO IA ── */}
-    {ev.aiRec&&<table style={{width:'100%',borderCollapse:'collapse',marginBottom:4}}><tbody>
-      <tr><Sec>Plan de Desarrollo de Competencias — Ítems NCA (generado por IA)</Sec></tr>
-      <tr><C s={{fontSize:10.5,lineHeight:1.7,whiteSpace:'pre-wrap'}}>{ev.aiRec}</C></tr>
-    </tbody></table>}
+    {/* ── PLAN DE DESARROLLO (por código NCA) ── */}
+    {(()=>{
+      const planItems=ev.plan?.planItems||{};
+      const hasPlanItems=Object.keys(planItems).some(k=>planItems[k]?.trim());
+      const ncaList=(ev.domains||[]).flatMap(d=>(d.items||[]).filter(i=>i.result==='NCA'));
+      if(!hasPlanItems&&!ev.aiRec) return null;
+      return <table style={{width:'100%',borderCollapse:'collapse',marginBottom:4}}><tbody>
+        <tr><Sec colSpan={2}>Plan de Desarrollo de Competencias — Ítems NCA</Sec></tr>
+        {ev.aiRec&&!hasPlanItems&&<tr><td colSpan={2} style={{border:'1px solid #C8D4E8',padding:'5px 8px',fontSize:10.5,lineHeight:1.7,whiteSpace:'pre-wrap'}}>{ev.aiRec}</td></tr>}
+        {hasPlanItems&&ncaList.map((item,idx)=>{
+          const code='NCA-'+String(idx+1).padStart(2,'0');
+          const txt=planItems[code]||'';
+          if(!txt) return null;
+          return [
+            <tr key={code+'_h'}>
+              <td colSpan={2} style={{border:'1px solid #C8D4E8',padding:'5px 8px',background:'#EEF3FA',fontWeight:700,fontSize:10.5}}>
+                <span style={{background:BK,color:'#fff',fontSize:9,fontWeight:700,borderRadius:4,padding:'2px 7px',marginRight:8,fontFamily:'monospace'}}>{code}</span>
+                {item.text}
+              </td>
+            </tr>,
+            <tr key={code+'_p'}><td colSpan={2} style={{border:'1px solid #C8D4E8',padding:'5px 8px',fontSize:10.5,lineHeight:1.7,whiteSpace:'pre-wrap'}}>{txt}</td></tr>
+          ];
+        })}
+      </tbody></table>;
+    })()}
 
     {/* ── APROBACIÓN DEL EVALUADO ── */}
     {ev.approval&&<table style={{width:'100%',borderCollapse:'collapse',marginBottom:4}}><tbody>
@@ -1349,18 +1369,32 @@ function PlanManager({ev,form,setForm,saving,msg,onSave,onBack}){
           })
     ),
     React.createElement('div',{style:{background:'#fff',border:'1px solid '+BD,borderRadius:14,padding:'14px 16px',marginBottom:12}},
-      React.createElement('div',{style:{fontSize:12,fontWeight:700,color:TX,marginBottom:8,textTransform:'uppercase',letterSpacing:'0.05em'}},'Plan de Desarrollo de Competencias'),
-      ev.aiRec
-        ? React.createElement('p',{style:{fontSize:13,lineHeight:1.7,color:TX,whiteSpace:'pre-wrap',margin:'0 0 10px'}},ev.aiRec)
-        : null,
-      React.createElement('label',{style:{fontSize:11,fontWeight:600,color:T3,textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6}},
-        ev.aiRec ? 'Ajustar o complementar el plan:' : 'Escribe el plan de desarrollo:'),
-      React.createElement('textarea',{
-        style:{border:'1px solid '+BD,borderRadius:8,padding:'8px 12px',fontSize:13,color:TX,width:'100%',background:'#fff',minHeight:120,resize:'vertical',fontFamily:'inherit',lineHeight:1.6},
-        value:form.planText||'',
-        placeholder:'Describe las actividades de refuerzo específicas para cada ítem NCA, la metodología recomendada (OJT, práctica supervisada, tutoría) y el plazo sugerido para re-evaluación...',
-        onChange:function(e){setForm(function(f){return {...f,planText:e.target.value};});}
-      })
+      React.createElement('div',{style:{fontSize:12,fontWeight:700,color:TX,marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}},'Plan de Desarrollo de Competencias'),
+      ncaItems.length===0
+        ? React.createElement('p',{style:{fontSize:12,color:T2,margin:0}},'No hay ítems NCA registrados.')
+        : ncaItems.map(function(item,idx){
+            var code='NCA-'+String(idx+1).padStart(2,'0');
+            return React.createElement('div',{key:code,style:{border:'1px solid #C3D5F0',borderRadius:10,padding:'12px 14px',marginBottom:10,background:'#F8FBFF'}},
+              React.createElement('div',{style:{display:'flex',gap:8,alignItems:'flex-start',marginBottom:8}},
+                React.createElement('span',{style:{background:BRAND,color:'#fff',fontSize:10,fontWeight:700,borderRadius:5,padding:'3px 9px',flexShrink:0,fontFamily:'monospace',marginTop:1}},code),
+                React.createElement('span',{style:{fontSize:12,color:TX,lineHeight:1.5}},item.text)
+              ),
+              React.createElement('label',{style:{fontSize:10,fontWeight:700,color:T3,textTransform:'uppercase',letterSpacing:'0.06em',display:'block',marginBottom:5}},'Plan de acción para '+code+':'),
+              React.createElement('textarea',{
+                style:{border:'1px solid '+BD,borderRadius:8,padding:'8px 10px',fontSize:12.5,color:TX,width:'100%',minHeight:90,resize:'vertical',fontFamily:'inherit',lineHeight:1.6,background:'#fff'},
+                value:(form.planItems&&form.planItems[code])||'',
+                placeholder:'Actividades de refuerzo, metodología (OJT, práctica supervisada, tutoría) y plazo para este ítem...',
+                onChange:function(e){
+                  var v=e.target.value;
+                  setForm(function(f){
+                    var pi=Object.assign({},f.planItems||{});
+                    pi[code]=v;
+                    return Object.assign({},f,{planItems:pi});
+                  });
+                }
+              })
+            );
+          })
     ),
     React.createElement('div',{style:{background:'#fff',border:'1px solid '+BD,borderRadius:14,padding:'16px',display:'flex',flexDirection:'column',gap:14}},
       React.createElement('h3',{style:{fontSize:16,fontWeight:600,color:TX,margin:'0 0 4px'}},'Estado del plan de desarrollo'),
@@ -2668,7 +2702,8 @@ export default function App(){
                               setManagingEv(e);
                               setPlanForm({estado:e.plan?.estado||'pendiente',fechaListo:e.plan?.fechaListo||'',
                                 observaciones:e.plan?.observaciones||'',evaluadorTelefono:e.plan?.evaluadorTelefono||'',
-                                planText:e.plan?.planText||''});
+                                planText:e.plan?.planText||'',
+                                planItems:e.plan?.planItems||{}});
                               setPlanMsg('');setView('admin:plan');
                             }}
                             style={{cursor:'pointer',whiteSpace:'nowrap',fontSize:10,fontWeight:600,borderRadius:6,padding:'5px 7px',
