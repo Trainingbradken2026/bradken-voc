@@ -247,7 +247,7 @@ function initEval(type,role){
     docCode:t.code, color:t.color,
     participant:{nombres:'',apellidos:'',cargo:'',fechaCurso:'',
       prereqCheck:null,logbook:null,colada:'',turno:'',equipo:'',area:'',
-      supNombre:'',supFecha:'',telefono:'',
+      operacionObservada:'',supNombre:'',supFecha:'',telefono:'',
     },
     evaluator:{nombre:'',fecha:today()},
     domains, overallResult:null, comments:'',
@@ -255,7 +255,7 @@ function initEval(type,role){
   };
 }
 function flatEval(d){return{id:d.id,type:d.type,role:d.role,mode:d.mode||'permiso',status:d.status||'draft',doc_code:d.docCode||'',color:d.color||'#005596',participant:d.participant||{},evaluator:d.evaluator||{},domains:d.domains||[],overall_result:d.overallResult||null,comments:d.comments||'',approval:d.approval||null,ai_rec:d.aiRec||'',evaluator_signed_at:d.evaluatorSignedAt||null,site:'chilca'};}
-function normalizeEval(row){return{id:row.id,type:row.type,role:row.role,mode:row.mode||'permiso',status:row.status||'draft',docCode:row.doc_code||'',color:row.color||'#005596',participant:row.participant||{nombres:'',apellidos:'',cargo:'',fechaCurso:'',prereqCheck:null,logbook:null,colada:'',turno:'',equipo:'',supNombre:'',supFecha:'',telefono:'',area:''},evaluator:row.evaluator||{nombre:'',fecha:''},domains:row.domains||[],overallResult:row.overall_result||null,comments:row.comments||'',approval:row.approval||null,aiRec:row.ai_rec||'',evaluatorSignedAt:row.evaluator_signed_at||null,createdAt:row.created_at||new Date().toISOString(),plan:row.plan||null};}
+function normalizeEval(row){return{id:row.id,type:row.type,role:row.role,mode:row.mode||'permiso',status:row.status||'draft',docCode:row.doc_code||'',color:row.color||'#005596',participant:row.participant||{nombres:'',apellidos:'',cargo:'',fechaCurso:'',prereqCheck:null,logbook:null,colada:'',turno:'',equipo:'',operacionObservada:'',supNombre:'',supFecha:'',telefono:'',area:''},evaluator:row.evaluator||{nombre:'',fecha:''},domains:row.domains||[],overallResult:row.overall_result||null,comments:row.comments||'',approval:row.approval||null,aiRec:row.ai_rec||'',evaluatorSignedAt:row.evaluator_signed_at||null,createdAt:row.created_at||new Date().toISOString(),plan:row.plan||null};}
 async function saveEval(d){try{const{error}=await supabase.from('evaluaciones').upsert(flatEval(d));return!error;}catch(e){return false;}}
 async function loadEval(code){try{const{data,error}=await supabase.from('evaluaciones').select('*').eq('id',code.toUpperCase().trim()).single();if(error||!data)return null;return normalizeEval(data);}catch(e){return null;}}
 async function loadAllEvals(){try{const{data,error}=await supabase.from('evaluaciones').select('*').order('created_at',{ascending:false});if(error||!data)return[];return data.map(normalizeEval);}catch(e){return[];}}
@@ -1142,7 +1142,7 @@ function PrintView({ev,onClose,docMeta={}}){
           :<span>☐ Mañana &nbsp; ☐ Tarde &nbsp; ☐ Noche</span>}
         </C>
       </tr>
-      <tr><H>Operación observada y comentarios / recomendaciones</H><C colSpan={3}>&nbsp;</C></tr>
+      <tr><H>Operación observada y comentarios / recomendaciones</H><C colSpan={3} s={{lineHeight:1.6,minHeight:32}}>{ev.participant?.operacionObservada||''}</C></tr>
     </tbody></table>
 
     {/* ── CONDICIONES DE LA EVALUACIÓN ── */}
@@ -2119,6 +2119,12 @@ export default function App(){
                 {r==='C'?'✅ Competente (C)':'❌ No Competente Aún (NCA)'}
               </button>)}
             </div>
+          </div>
+          <div style={{marginBottom:16}}>
+            <label style={s.label}>Operación observada y comentarios / recomendaciones</label>
+            <textarea style={{...s.input,height:72,resize:'vertical'}} value={ev.participant?.operacionObservada||''}
+              onChange={e=>upEv(n=>{n.participant.operacionObservada=e.target.value;})}
+              placeholder="Describe la tarea o actividad específica observada, condiciones del área, materiales, turno..."/>
           </div>
           <div style={{marginBottom:16}}>
             <label style={s.label}>Comentarios y recomendaciones del evaluador</label>
