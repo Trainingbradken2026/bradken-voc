@@ -1799,7 +1799,13 @@ export default function App(){
                       <div style={{fontSize:12,color:G,marginTop:2,fontWeight:500}}>🟢 Puede evaluarse desde: {fechaF}</div>
                       {e.plan?.observaciones&&<div style={{fontSize:11,color:T2,marginTop:4,fontStyle:'italic'}}>"{e.plan.observaciones}"</div>}
                     </div>
-                    <button onClick={()=>{
+                    <button onClick={async()=>{
+                        // Mark original eval plan as re-evaluated → removes from pending list
+                        const updatedPlan={...(e.plan||{}),estado:'re_evaluado',reEvalFecha:new Date().toISOString()};
+                        await supabase.from('evaluaciones').update({plan:updatedPlan}).eq('id',e.id);
+                        // Refresh pending list
+                        const reevals=await loadPendingReevals();
+                        setPendingReevals(reevals);
                         // Start new eval pre-filled with original participant data
                         const newEval=initEval(e.type,e.role);
                         newEval.participant={
