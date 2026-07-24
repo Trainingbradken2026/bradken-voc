@@ -1346,7 +1346,8 @@ function PlanManager({ev,form,setForm,saving,msg,onSave,onBack}){
   const statusList=[
     {val:'pendiente',lbl:'Pendiente',col:R,bg:RBKG},
     {val:'en_progreso',lbl:'En progreso',col:AM,bg:ABKG},
-    {val:'listo',lbl:'Listo para re-evaluar',col:G,bg:GBKG}
+    {val:'listo',lbl:'Listo para re-evaluar',col:G,bg:GBKG},
+    {val:'re_evaluado',lbl:'Re-evaluado ✓',col:'#5B21B6',bg:'#F5F3FF'}
   ];
   
   return React.createElement('div',null,
@@ -2730,10 +2731,10 @@ export default function App(){
                               setPlanMsg('');setView('admin:plan');
                             }}
                             style={{cursor:'pointer',whiteSpace:'nowrap',fontSize:10,fontWeight:600,borderRadius:6,padding:'5px 7px',
-                              background:e.plan?.estado==='listo'?GBKG:e.plan?.estado==='en_progreso'?ABKG:RBKG,
-                              color:e.plan?.estado==='listo'?G:e.plan?.estado==='en_progreso'?AM:R,
-                              border:`1px solid ${e.plan?.estado==='listo'?GBD:e.plan?.estado==='en_progreso'?ABD:RBD}`}}>
-                            {e.plan?.estado==='listo'?'🟢':e.plan?.estado==='en_progreso'?'🟡':'🔴'} Plan
+                              background:e.plan?.estado==='re_evaluado'?'#F5F3FF':e.plan?.estado==='listo'?GBKG:e.plan?.estado==='en_progreso'?ABKG:RBKG,
+                              color:e.plan?.estado==='re_evaluado'?'#5B21B6':e.plan?.estado==='listo'?G:e.plan?.estado==='en_progreso'?AM:R,
+                              border:`1px solid ${e.plan?.estado==='re_evaluado'?'#C4B5FD':e.plan?.estado==='listo'?GBD:e.plan?.estado==='en_progreso'?ABD:RBD}`}}>
+                            {e.plan?.estado==='re_evaluado'?'✅':e.plan?.estado==='listo'?'🟢':e.plan?.estado==='en_progreso'?'🟡':'🔴'} Plan
                           </button>}
                         </div>
                       </td>
