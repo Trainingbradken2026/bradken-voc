@@ -1800,8 +1800,20 @@ export default function App(){
                       {e.plan?.observaciones&&<div style={{fontSize:11,color:T2,marginTop:4,fontStyle:'italic'}}>"{e.plan.observaciones}"</div>}
                     </div>
                     <button onClick={()=>{
+                        // Start new eval pre-filled with original participant data
+                        const newEval=initEval(e.type,e.role);
+                        newEval.participant={
+                          ...newEval.participant,
+                          nombres:e.participant?.nombres||'',
+                          apellidos:e.participant?.apellidos||'',
+                          cargo:e.participant?.cargo||'',
+                          telefono:e.participant?.telefono||'',
+                          equipo:e.participant?.equipo||'',
+                          area:e.participant?.area||'',
+                        };
+                        setEv(newEval);
                         setEvalCategory(null);
-                        setView('eval:type');
+                        setView('eval:participant');
                       }}
                       style={{...s.btnPrimary,fontSize:12,padding:'7px 14px',flexShrink:0}}>
                       Iniciar re-evaluación →
