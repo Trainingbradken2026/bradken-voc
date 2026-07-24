@@ -1505,7 +1505,12 @@ export default function App(){
   const [evalPinVisible,setEvalPinVisible]=useState(false);
   const [evalPinAttempts,setEvalPinAttempts]=useState(0);
 
-  // Fonts loaded via index.html
+  // Refresh pending re-evals every time the evaluator reaches the category screen
+  useEffect(()=>{
+    if(view==='eval:type'){
+      loadPendingReevals().then(setPendingReevals);
+    }
+  },[view]);
   useEffect(()=>{
     loadDocMeta().then(meta=>setDocMeta(meta));
   },[]);
