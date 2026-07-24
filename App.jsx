@@ -1108,7 +1108,7 @@ function PrintView({ev,onClose,docMeta={}}){
           <DigSig
             name={ev.approval?.by}
             ts={ev.approval?.signedAt}
-            label="✦ Aprobado electrónicamente por el evaluado"
+            label="✦ Firmado electrónicamente por el evaluado"
             color='#1A6B3A'
             bgColor='#F0FDF4'
           />
@@ -1253,7 +1253,7 @@ function PrintView({ev,onClose,docMeta={}}){
     {/* ── APROBACIÓN DEL EVALUADO ── */}
     {ev.approval&&<table style={{width:'100%',borderCollapse:'collapse',marginBottom:4}}><tbody>
       <tr><td colSpan={4} style={{border:'1px solid #C8D4E8',padding:'5px 8px',fontSize:11,fontWeight:700,background:'#1A6B3A',color:'#fff'}}>
-        Confirmación de Recepción de Resultados — Evaluado
+        Firma del Evaluado — Confirmación de Resultados
       </td></tr>
       <tr><H s={{width:'22%'}}>Nombre del Evaluado</H><C colSpan={3} s={{fontWeight:600}}>{ev.approval.by||''}</C></tr>
       <tr>
@@ -2168,15 +2168,31 @@ export default function App(){
           </div>
           <div style={{marginBottom:14}}>
             <label style={s.label}>Resultado general de la evaluación</label>
-            <div style={{display:'flex',gap:10,marginTop:6}}>
-              {['C','NCA'].map(r=><button key={r} onClick={()=>upEv(n=>{n.overallResult=r;})}
-                style={{flex:1,padding:'10px',borderRadius:22,fontSize:13,fontWeight:600,cursor:'pointer',transition:'all .1s',
-                  background:ev.overallResult===r?(r==='C'?G:R):SF,
-                  color:ev.overallResult===r?'#fff':r==='C'?G:R,
-                  border:`1.5px solid ${ev.overallResult===r?(r==='C'?G:R):(r==='C'?GBD:RBD)}`}}>
-                {r==='C'?'✅ Competente (C)':'❌ No Competente Aún (NCA)'}
-              </button>)}
-            </div>
+            {(()=>{
+              const hasNCA=(ev.domains||[]).some(d=>(d.items||[]).some(i=>i.result==='NCA'));
+              return <div style={{display:'flex',gap:10,marginTop:6,flexDirection:'column'}}>
+                {hasNCA&&<div style={{fontSize:11,color:R,background:RBKG,border:`1px solid ${RBD}`,borderRadius:8,padding:'6px 12px'}}>
+                  ⚠ Se detectaron ítems NCA — el resultado Competente está bloqueado automáticamente.
+                </div>}
+                <div style={{display:'flex',gap:10}}>
+                  <button disabled={hasNCA} onClick={()=>{if(!hasNCA)upEv(n=>{n.overallResult='C';});}}
+                    style={{flex:1,padding:'10px',borderRadius:22,fontSize:13,fontWeight:600,
+                      cursor:hasNCA?'not-allowed':'pointer',opacity:hasNCA?0.3:1,transition:'all .1s',
+                      background:ev.overallResult==='C'?G:SF,
+                      color:ev.overallResult==='C'?'#fff':G,
+                      border:`1.5px solid ${ev.overallResult==='C'?G:GBD}`}}>
+                    ✅ Competente (C)
+                  </button>
+                  <button onClick={()=>upEv(n=>{n.overallResult='NCA';})}
+                    style={{flex:1,padding:'10px',borderRadius:22,fontSize:13,fontWeight:600,cursor:'pointer',transition:'all .1s',
+                      background:ev.overallResult==='NCA'?R:SF,
+                      color:ev.overallResult==='NCA'?'#fff':R,
+                      border:`1.5px solid ${ev.overallResult==='NCA'?R:RBD}`}}>
+                    ❌ No Competente Aún (NCA)
+                  </button>
+                </div>
+              </div>;
+            })()}
           </div>
           <div style={{marginBottom:16}}>
             <label style={s.label}>Operación observada y comentarios / recomendaciones</label>
@@ -2605,7 +2621,7 @@ export default function App(){
           const comp=adminEvals.filter(e=>e.overallResult==='C').length;
           return <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:20}}>
             {[{label:'Total evaluaciones',val:total,c:'var(--text-primary)'},
-              {label:'Aprobadas por evaluado',val:approved,c:'#166534'},
+              {label:'Firmadas por evaluado',val:approved,c:'#166534'},
               {label:'Pendientes de aprobación',val:pending,c:'#92400e'},
               {label:'Resultado Competente',val:`${Math.round(comp/total*100)}%`,c:BK}
             ].map(k=><div key={k.label} style={{background:'var(--surface-1)',borderRadius:8,padding:'12px 14px',border:'0.5px solid var(--border)'}}>
@@ -2776,8 +2792,8 @@ export default function App(){
       {/* ── APPROVE: DONE ── */}
       {view==='approve:done'&&ev&&<div style={{textAlign:'center',padding:'32px 0'}}>
         <div style={{fontSize:48,marginBottom:12}}>🎉</div>
-        <h2 style={s.h1}>Evaluación aprobada</h2>
-        <p style={{color:'var(--text-secondary)',marginBottom:24}}>Has confirmado la revisión de tu evaluación de competencias.</p>
+        <h2 style={s.h1}>Evaluación firmada</h2>
+        <p style={{color:'var(--text-secondary)',marginBottom:24}}>Has firmado y confirmado tu evaluación de competencias.</p>
         <ResultBadge r={ev.overallResult}/>
         <div style={{marginTop:24,display:'flex',gap:10,justifyContent:'center'}}>
           <button style={s.btnPrimary} onClick={()=>openPrint('approve:done')}>🖨 Descargar PDF</button>
