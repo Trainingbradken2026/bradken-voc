@@ -2648,7 +2648,7 @@ export default function App(){
           <select value={adminFilter.status} onChange={e=>setAdminFilter(f=>({...f,status:e.target.value}))}>
             <option value=''>Todos los estados</option>
             <option value='pending_approval'>Pendiente aprobación</option>
-            <option value='approved'>Aprobado</option>
+            <option value='approved'>Firmado</option>
           </select>
         </div>
 
@@ -2716,7 +2716,7 @@ export default function App(){
                         <span style={{...s.tag,fontSize:11,
                           background:e.status==='approved'?GBKG:e.status==='pending_approval'?ABKG:S2,
                           color:e.status==='approved'?G:e.status==='pending_approval'?AM:T2}}>
-                          {e.status==='approved'?'Aprobada':e.status==='pending_approval'?'Pendiente':'Borrador'}
+                          {e.status==='approved'?'Firmada':e.status==='pending_approval'?'Pendiente':'Borrador'}
                         </span>
                       </td>
                       <td style={{padding:'8px 10px',fontSize:12,color:'var(--text-secondary)',whiteSpace:'nowrap'}}>
