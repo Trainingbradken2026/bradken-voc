@@ -918,6 +918,167 @@ function ResultBadge({r}){
   </span>;
 }
 
+// ════════════════════════════════════════════════════════════════════════
+// BRADKEN CORPORATE PDF CHROME — single source of truth for header/footer.
+//
+// These functions draw directly on the jsPDF canvas (native text/rects),
+// not screenshots of the DOM. That is what makes them behave like a real
+// Header/Footer: identical position, size and spacing on every page, a
+// content area whose height is reserved in advance so body content can
+// never invade them, and dynamic fields (page X of Y, doc code, dates,
+// reviewer/approver) computed automatically from docMeta.
+//
+// Reused by ANY document exported from this app — never re-implemented
+// per document type. To change the corporate header/footer everywhere,
+// edit only this block.
+// ════════════════════════════════════════════════════════════════════════
+const PDF_PAGE_W=210, PDF_PAGE_H=297, PDF_MARGIN=10;               // A4, mm
+const PDF_CONTENT_W=PDF_PAGE_W-PDF_MARGIN*2;                       // 190mm
+const PDF_COVER_HEADER_H=32;   // banner + printed-copy notice — page 1 only
+const PDF_COVER_FOOTER_H=46;   // copyright/confidential + doc-control table — page 1 only
+const PDF_DOC_HEADER_H=35;     // repeating header block — page 2..N
+const PDF_DOC_FOOTER_H=22;     // repeating footer block — page 2..N
+const PDF_BORDER=[200,212,232], PDF_LBL=[0,85,150], PDF_TXT=[20,20,20], PDF_GREY=[85,85,85];
+
+const PDF_CONFIDENTIAL_TXT="This document, including any attachments, is confidential and may contain commercially sensitive information. Please notify Bradken if you have received this document in error. Any unauthorised use of this document or anything contained in it is expressly prohibited.";
+const PDF_UNCONTROLLED_TXT="Uncontrolled Copy if it has been printed or downloaded outside a validated copy control register";
+const PDF_PRINTED_COPY_TXT="Si este documento se ha impreso o descargado, se convierte inmediatamente en una copia no controlada y no puede utilizarse ni consultarse en ningún requisito operativo a menos que se utilice un registro de control de copias validado o un sistema equivalente.";
+
+/** Loads an external script once and caches the promise on window so repeated PDF exports don't re-fetch it. */
+function loadExternalScript(src,globalCheck){
+  if(globalCheck()) return Promise.resolve();
+  window.__bkScriptLoads=window.__bkScriptLoads||{};
+  if(window.__bkScriptLoads[src]) return window.__bkScriptLoads[src];
+  const p=new Promise((res,rej)=>{
+    const el=document.createElement('script');
+    el.src=src; el.onload=res; el.onerror=rej;
+    document.head.appendChild(el);
+  });
+  window.__bkScriptLoads[src]=p;
+  return p;
+}
+
+/** Builds the dynamic document-control fields shared by every header/footer draw call. */
+function buildPdfDocMeta({ev,dm,typeInfo,isLicencia,roleLabel,subtitle}){
+  return {
+    org:'Bradken', proceso:'Capability & Training', region:'Chilca', tipo:'Form (blank)',
+    titulo:`${typeInfo?.label||''}${isLicencia?` — ${roleLabel} ${subtitle}`:` — Verificación de Competencia — ${roleLabel}`}`,
+    bknDoc:dm.bknDoc||ev.docCode||'', fecha:dm.fecha||'', revisadoPor:dm.revisadoPor||'', aprobadoPor:dm.aprobadoPor||'',
+  };
+}
+
+/** CoverHeader() — page 1 only: corporate banner image (captured once, it's an SVG gradient) + printed-copy notice. Returns the Y where body content must start. */
+function CoverHeader(pdf,bannerImgDataUrl){
+  const y0=PDF_MARGIN, imgH=19;
+  if(bannerImgDataUrl) pdf.addImage(bannerImgDataUrl,'PNG',PDF_MARGIN,y0,PDF_CONTENT_W,imgH);
+  pdf.setFont('helvetica','normal'); pdf.setFontSize(7); pdf.setTextColor(...PDF_GREY);
+  pdf.text(pdf.splitTextToSize(PDF_PRINTED_COPY_TXT,PDF_CONTENT_W),PDF_MARGIN,y0+imgH+4);
+  return y0+PDF_COVER_HEADER_H;
+}
+
+/** DocumentHeader() — repeating header for page 2..N. Fixed size/position/spacing on every call — never varies. Returns the Y where body content must start. */
+function DocumentHeader(pdf,meta){
+  const y0=PDF_MARGIN, colW=PDF_CONTENT_W/4;
+  pdf.setFillColor(0,40,74); pdf.rect(PDF_MARGIN,y0,PDF_CONTENT_W,3.2,'F');
+  let y=y0+3.2;
+
+  pdf.setDrawColor(...PDF_BORDER); pdf.setLineWidth(0.15);
+  [['Organización:',meta.org],['Proceso:',meta.proceso],['Region:',meta.region],['Tipo de documento:',meta.tipo]]
+    .forEach((c,i)=>{
+      const x=PDF_MARGIN+i*colW;
+      pdf.rect(x,y,colW,9.5);
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(7); pdf.setTextColor(...PDF_LBL);
+      pdf.text(c[0],x+2,y+3.6);
+      pdf.setFont('helvetica','normal'); pdf.setFontSize(8); pdf.setTextColor(...PDF_TXT);
+      pdf.text(String(c[1]||''),x+2,y+7.4);
+    });
+  y+=9.5;
+
+  pdf.rect(PDF_MARGIN,y,PDF_CONTENT_W,8);
+  pdf.setFont('helvetica','bold'); pdf.setFontSize(7); pdf.setTextColor(...PDF_LBL);
+  pdf.text('Título del Documento:',PDF_MARGIN+2,y+3.6);
+  pdf.setFont('helvetica','bold'); pdf.setFontSize(8); pdf.setTextColor(...PDF_TXT);
+  pdf.text(pdf.splitTextToSize(meta.titulo||'',PDF_CONTENT_W-4)[0]||'',PDF_MARGIN+2,y+7);
+  y+=8;
+
+  [['BKN Doc & Revisión:',meta.bknDoc],['Fecha:',meta.fecha],['Revisado por:',meta.revisadoPor],['Aprobado por:',meta.aprobadoPor]]
+    .forEach((c,i)=>{
+      const x=PDF_MARGIN+i*colW;
+      pdf.rect(x,y,colW,8);
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(7); pdf.setTextColor(...PDF_LBL);
+      pdf.text(c[0],x+2,y+3.4);
+      pdf.setFont('helvetica','normal'); pdf.setFontSize(7.5); pdf.setTextColor(...PDF_TXT);
+      pdf.text(String(c[1]||''),x+2,y+6.6);
+    });
+  y+=8;
+
+  pdf.setFont('helvetica','normal'); pdf.setFontSize(6.8); pdf.setTextColor(...PDF_GREY);
+  pdf.text(PDF_UNCONTROLLED_TXT,PDF_MARGIN,y+3);
+
+  return y0+PDF_DOC_HEADER_H;
+}
+
+/** DocumentFooter() — repeating footer for page 2..N: copyright/page number + confidentiality notice + logo. Position is always PAGE_H - MARGIN - FOOTER_H, so it never depends on content length. */
+function DocumentFooter(pdf,meta,pageNum,totalPages,logoDataUrl){
+  const y=PDF_PAGE_H-PDF_MARGIN-PDF_DOC_FOOTER_H;
+  pdf.setDrawColor(225,225,225); pdf.setLineWidth(0.1);
+  pdf.line(PDF_MARGIN,y,PDF_MARGIN+PDF_CONTENT_W,y);
+  let ty=y+4;
+  pdf.setFont('helvetica','bold'); pdf.setFontSize(7.5); pdf.setTextColor(30,30,30);
+  pdf.text('© Bradken Pty Limited 2026',PDF_MARGIN,ty);
+  const w1=pdf.getTextWidth('© Bradken Pty Limited 2026');
+  pdf.setFont('helvetica','normal');
+  pdf.text(`  l  ABN 33 108 693 009  l  Page: ${pageNum} of ${totalPages}  l `,PDF_MARGIN+w1,ty);
+
+  ty+=4;
+  pdf.setFont('helvetica','bold'); pdf.setFontSize(7);
+  pdf.text('Confidential Internal Use Only:',PDF_MARGIN,ty);
+  ty+=3.2;
+  pdf.setFont('helvetica','normal'); pdf.setFontSize(6.8); pdf.setTextColor(60,60,60);
+  pdf.text(pdf.splitTextToSize(PDF_CONFIDENTIAL_TXT,PDF_CONTENT_W-42),PDF_MARGIN,ty);
+
+  if(logoDataUrl){
+    const logoW=26, logoH=26*102/426; // matches the source logo's native aspect ratio
+    pdf.addImage(logoDataUrl,'PNG',PDF_MARGIN+PDF_CONTENT_W-logoW,y+2,logoW,logoH);
+  }
+}
+
+/** CoverFooter() — page 1 only: copyright/page/doc-code + confidentiality notice + the document-control table (Organización/Proceso/Región/Tipo + BKN Doc/Fecha/Revisado/Aprobado). */
+function CoverFooter(pdf,meta,pageNum,totalPages){
+  const y=PDF_PAGE_H-PDF_MARGIN-PDF_COVER_FOOTER_H;
+  pdf.setDrawColor(0,85,150); pdf.setLineWidth(0.4);
+  pdf.line(PDF_MARGIN,y,PDF_MARGIN+PDF_CONTENT_W,y);
+  let ty=y+4;
+  pdf.setFont('helvetica','bold'); pdf.setFontSize(7.5); pdf.setTextColor(30,30,30);
+  pdf.text('© Bradken Pty Limited 2026',PDF_MARGIN,ty);
+  const w1=pdf.getTextWidth('© Bradken Pty Limited 2026');
+  pdf.setFont('helvetica','normal');
+  pdf.text(`  l  ABN 33 108 693 009  l  Page: ${pageNum} of ${totalPages}  l  ${meta.bknDoc||''}`,PDF_MARGIN+w1,ty);
+
+  ty+=4.2;
+  pdf.setFont('helvetica','bold'); pdf.setFontSize(7);
+  pdf.text('Confidential Internal Use Only:',PDF_MARGIN,ty);
+  ty+=3.2;
+  pdf.setFont('helvetica','normal'); pdf.setFontSize(6.8); pdf.setTextColor(60,60,60);
+  const lines=pdf.splitTextToSize(PDF_CONFIDENTIAL_TXT,PDF_CONTENT_W);
+  pdf.text(lines,PDF_MARGIN,ty);
+  ty+=lines.length*3.1+2;
+
+  const colW=PDF_CONTENT_W/4, rowH=8;
+  [
+    [['Organización:',meta.org],['Proceso:',meta.proceso],['Region:',meta.region],['Tipo de documento:',meta.tipo]],
+    [['BKN Doc & Revision:',meta.bknDoc],['Fecha:',meta.fecha],['Revisado por:',meta.revisadoPor],['Aprobado por:',meta.aprobadoPor]],
+  ].forEach((row,ri)=>row.forEach((c,ci)=>{
+    const x=PDF_MARGIN+ci*colW, yy=ty+ri*rowH;
+    pdf.setDrawColor(...PDF_BORDER); pdf.setLineWidth(0.15);
+    pdf.rect(x,yy,colW,rowH);
+    pdf.setFont('helvetica','bold'); pdf.setFontSize(7); pdf.setTextColor(...PDF_LBL);
+    pdf.text(c[0],x+2,yy+3.4);
+    pdf.setFont('helvetica','normal'); pdf.setFontSize(7.5); pdf.setTextColor(...PDF_TXT);
+    pdf.text(String(c[1]||''),x+2,yy+6.6);
+  }));
+}
+
 function PrintView({ev,onClose,docMeta={}}){
   const dm={...DOC_META_DEFAULTS[ev?.type||''],...docMeta};
   const [pdfLoading,setPdfLoading]=useState(false);
@@ -933,45 +1094,55 @@ function PrintView({ev,onClose,docMeta={}}){
   const today2=()=>new Date().toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
 
   async function handlePDF(){
-    const el=document.getElementById('bradken-print-doc');
-    if(!el){setPdfError('Contenido no encontrado.');return;}
+    const bannerEl=document.getElementById('pdf-cover-banner');
+    const bodyEl=document.getElementById('pdf-body-content');
+    if(!bodyEl){setPdfError('Contenido no encontrado.');return;}
     setPdfLoading(true); setPdfError('');
     try{
-      await new Promise((res,rej)=>{
-        if(window.html2canvas){res();return;}
-        const s=document.createElement('script');
-        s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-        s.onload=res; s.onerror=rej; document.head.appendChild(s);
-      });
-      await new Promise((res,rej)=>{
-        if(window.jspdf){res();return;}
-        const s=document.createElement('script');
-        s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-        s.onload=res; s.onerror=rej; document.head.appendChild(s);
-      });
-      const canvas=await window.html2canvas(el,{
-        scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false,
-        windowWidth:el.scrollWidth,windowHeight:el.scrollHeight
-      });
+      await loadExternalScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',()=>!!window.html2canvas);
+      await loadExternalScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',()=>!!window.jspdf);
+
+      const capture=(node)=>window.html2canvas(node,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false,windowWidth:node.scrollWidth});
+      const [bannerCanvas,bodyCanvas]=await Promise.all([
+        bannerEl?capture(bannerEl):Promise.resolve(null),
+        capture(bodyEl),
+      ]);
+      const bannerImgDataUrl=bannerCanvas?bannerCanvas.toDataURL('image/png'):null;
+      const logoEl=document.querySelector('#bradken-print-doc img[alt="Bradken"]');
+      const logoDataUrl=logoEl?logoEl.src:null;
+
       const{jsPDF}=window.jspdf;
       const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-      const pw=pdf.internal.pageSize.getWidth();
-      const ph=pdf.internal.pageSize.getHeight();
-      const margin=10;
-      const cw=pw-margin*2;
-      const ratio=cw/canvas.width;
-      const fullH=canvas.height*ratio;
-      const totalPages=Math.ceil(fullH/ph);
-      for(let p=0;p<totalPages;p++){
-        if(p>0) pdf.addPage();
-        const srcY=Math.floor((p*ph)/ratio);
-        const srcH=Math.min(Math.floor(ph/ratio),canvas.height-srcY);
-        if(srcH<=0) break;
-        const pc=document.createElement('canvas');
-        pc.width=canvas.width; pc.height=srcH;
-        pc.getContext('2d').drawImage(canvas,0,srcY,canvas.width,srcH,0,0,canvas.width,srcH);
-        pdf.addImage(pc.toDataURL('image/jpeg',0.92),'JPEG',margin,0,cw,srcH*ratio);
-      }
+
+      // ── Paginate: reserve exact header+footer height per page type, body content only ever fills what's left ──
+      const pxPerMM=bodyCanvas.width/PDF_CONTENT_W;
+      const bodyTotalMM=bodyCanvas.height/pxPerMM;
+      const firstContentH=PDF_PAGE_H-PDF_MARGIN*2-PDF_COVER_HEADER_H-PDF_COVER_FOOTER_H;
+      const innerContentH=PDF_PAGE_H-PDF_MARGIN*2-PDF_DOC_HEADER_H-PDF_DOC_FOOTER_H;
+      const pageHeightsMM=[Math.min(firstContentH,bodyTotalMM)];
+      let remaining=bodyTotalMM-pageHeightsMM[0];
+      while(remaining>0.5){ const h=Math.min(innerContentH,remaining); pageHeightsMM.push(h); remaining-=h; }
+      const totalPages=pageHeightsMM.length;
+
+      const meta=buildPdfDocMeta({ev,dm,typeInfo,isLicencia,roleLabel,subtitle});
+
+      let srcYpx=0;
+      pageHeightsMM.forEach((hMM,idx)=>{
+        if(idx>0) pdf.addPage();
+        const isFirst=idx===0;
+        const contentTopY=isFirst?CoverHeader(pdf,bannerImgDataUrl):DocumentHeader(pdf,meta);
+
+        const srcHpx=Math.round(hMM*pxPerMM);
+        const slice=document.createElement('canvas');
+        slice.width=bodyCanvas.width; slice.height=srcHpx;
+        slice.getContext('2d').drawImage(bodyCanvas,0,srcYpx,bodyCanvas.width,srcHpx,0,0,bodyCanvas.width,srcHpx);
+        pdf.addImage(slice.toDataURL('image/jpeg',0.92),'JPEG',PDF_MARGIN,contentTopY,PDF_CONTENT_W,hMM);
+        srcYpx+=srcHpx;
+
+        if(isFirst) CoverFooter(pdf,meta,idx+1,totalPages);
+        else DocumentFooter(pdf,meta,idx+1,totalPages,logoDataUrl);
+      });
+
       const nom=`VOC_${(ev.type||'').toUpperCase()}_${(ev.participant.nombres||'').replace(/\s+/g,'_')}_${ev.id}.pdf`;
       try{
         pdf.save(nom);
@@ -1040,7 +1211,7 @@ function PrintView({ev,onClose,docMeta={}}){
     <div id="bradken-print-doc" style={{background:'#fff',padding:'4px'}}>
 
     {/* ══ PAGE 1 HEADER: Diagonal blue banner + logo (SVG-based for html2canvas compatibility) ══ */}
-    <div style={{position:'relative',width:'100%',height:76,marginBottom:8}}>
+    <div id="pdf-cover-banner" style={{position:'relative',width:'100%',height:76,marginBottom:8}}>
       <svg width="100%" height="76" viewBox="0 0 800 76" preserveAspectRatio="none"
            style={{position:'absolute',top:0,left:0}}>
         <defs>
@@ -1066,6 +1237,7 @@ function PrintView({ev,onClose,docMeta={}}){
       Si este documento se ha impreso o descargado, se convierte inmediatamente en una copia no controlada y no puede utilizarse ni consultarse en ningún requisito operativo a menos que se utilice un registro de control de copias validado o un sistema equivalente.
     </p>
 
+    <div id="pdf-body-content">
     {/* ── DOCUMENT TITLE SECTION ── */}
     <div style={{marginBottom:14}}>
       <div style={{fontFamily:'Arial,sans-serif',fontSize:22,fontWeight:700,color:'#005596',marginBottom:2,lineHeight:1.2}}>
@@ -1262,51 +1434,14 @@ function PrintView({ev,onClose,docMeta={}}){
         <C>{dm.rev||'1'}</C><C>{dm.fechaEmision||'30-Jun-26'}</C><C>{dm.clausula||'Emisión inicial – formato Bradken Chilca.'}</C><C>{dm.revisadoPor||'avera'}</C><C>{dm.aprobadoPor||'hramamurthi'}</C>
       </tr>
     </tbody></table>
+    </div>{/* end pdf-body-content */}
 
-    {/* ══ BOTTOM META TABLE (Organización / Título / BKN Doc) ══ */}
-    <table style={{width:'100%',borderCollapse:'collapse',marginTop:8,marginBottom:4,border:'1px solid #C8D8EC'}}><tbody>
-      <tr>
-        {['Organización','Proceso','Región','Tipo de documento'].map((lbl,i)=>(
-          <td key={i} style={{border:'1px solid #C8D8EC',padding:'6px 10px',width:'25%',verticalAlign:'top'}}>
-            <div style={{fontSize:9,color:'#888',marginBottom:2}}>{lbl}:</div>
-            <div style={{fontSize:11,fontWeight:700,color:'#111'}}>
-              {['Bradken','Capability & Training','Chilca','Form (blank)'][i]}
-            </div>
-          </td>
-        ))}
-      </tr>
-      <tr>
-        <td colSpan={4} style={{border:'1px solid #C8D8EC',padding:'6px 10px'}}>
-          <span style={{fontSize:10,color:'#888'}}>Título del Documento: </span>
-          <span style={{fontSize:11,fontWeight:700,color:'#111'}}>
-            {typeInfo?.label}{isLicencia?` — ${roleLabel} ${subtitle}`:` — Verificación de Competencia — ${roleLabel}`}
-          </span>
-        </td>
-      </tr>
-      <tr>
-        {[
-          ['BKN Doc & Revisión',dm.bknDoc||ev.docCode],
-          ['Fecha',dm.fecha||'30-Jun-26'],
-          ['Revisado por',dm.revisadoPor||'avera'],
-          ['Aprobado por',dm.aprobadoPor||'hramamurthi'],
-        ].map(([lbl,val],i)=>(
-          <td key={i} style={{border:'1px solid #C8D8EC',padding:'6px 10px',verticalAlign:'top'}}>
-            <span style={{fontSize:10,color:'#888'}}>{lbl}: </span>
-            <span style={{fontSize:11,fontWeight:700,color:'#111'}}>{val}</span>
-          </td>
-        ))}
-      </tr>
-    </tbody></table>
-
-    {/* ── FOOTER ── */}
-    <div style={{borderTop:`2px solid ${BK}`,paddingTop:6,marginTop:4}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-        <div style={{fontSize:9,color:'#555',lineHeight:1.5}}>
-          <b>© Bradken Pty Limited 2026</b> l ABN 33 108 693 009 l Código de evaluación: <b>{ev.id}</b><br/>
-          <b>Solo para uso interno confidencial:</b> Este documento es confidencial y puede contener información comercial sensible. Queda expresamente prohibido cualquier uso no autorizado.
-        </div>
-        <BradkenLogo/>
-      </div>
+    {/* El encabezado y pie de página institucionales (con numeración de página automática,
+        franja Organización/Proceso/Región/Tipo, y tabla de control documental) se generan
+        de forma nativa en cada página del PDF descargado — ver CoverHeader/DocumentHeader/
+        DocumentFooter/CoverFooter, no se renderizan aquí para evitar duplicarlos. */}
+    <div className="no-print" style={{marginTop:10,padding:'8px 12px',background:'#F0F4FA',border:'1px dashed #C8D4E8',borderRadius:6,fontSize:11,color:'#556'}}>
+      ℹ El encabezado, pie de página y numeración (Page X of Y) se agregan automáticamente al generar el PDF, igual en todas las páginas.
     </div>
 
     </div>{/* end bradken-print-doc */}
