@@ -873,23 +873,8 @@ TYPES.forEach(t=>{
   };
 });
 
-async function getAI(ev){
-  const nca=ev.domains.flatMap(d=>d.items.filter(i=>i.result==='NCA').map(i=>i.text));
-  if(!nca.length) return '';
-  try{
-    // Call Vercel API route (works in production, avoids CORS)
-    const res=await fetch('/api/generate-plan',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({type:ev.type,role:ev.role,items:nca})
-    });
-    if(!res.ok) return '';
-    const data=await res.json();
-    return data.plan||'';
-  }catch(e){
-    return '';
-  }
-}
+// AI plan generation disabled — activate by adding ANTHROPIC_API_KEY to Vercel and deploying api/generate_plan.py
+async function getAI(){ return ''; }
 
 const s={
   layout:{fontFamily:"'DM Sans','Segoe UI',system-ui,sans-serif",minHeight:'100vh',background:PGBG,color:TX},
@@ -2632,12 +2617,22 @@ export default function App(){
           const total=adminEvals.length;
           const approved=adminEvals.filter(e=>e.status==='approved').length;
           const pending=adminEvals.filter(e=>e.status==='pending_approval').length;
-          const comp=adminEvals.filter(e=>e.overallResult==='C').length;
-          return <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:20}}>
+          // Conformes / No Conformes por trabajador único — solo su evaluación más reciente por tipo
+          const latestByWorker={};
+          adminEvals.forEach(e=>{
+            const key=`${(e.participant?.nombres||'').trim().toLowerCase()}|${(e.participant?.apellidos||'').trim().toLowerCase()}|${e.type}`;
+            const prev=latestByWorker[key];
+            if(!prev||new Date(e.createdAt)>new Date(prev.createdAt)) latestByWorker[key]=e;
+          });
+          const latestList=Object.values(latestByWorker);
+          const conformes=latestList.filter(e=>e.overallResult==='C').length;
+          const noConformes=latestList.filter(e=>e.overallResult==='NCA').length;
+          return <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10,marginBottom:20}}>
             {[{label:'Total evaluaciones',val:total,c:'var(--text-primary)'},
               {label:'Firmadas por evaluado',val:approved,c:'#166534'},
               {label:'Pendientes de aprobación',val:pending,c:'#92400e'},
-              {label:'Resultado Competente',val:`${Math.round(comp/total*100)}%`,c:BK}
+              {label:'Total de Trabajadores Conformes',val:conformes,c:G},
+              {label:'Total de Trabajadores No Conformes',val:noConformes,c:R}
             ].map(k=><div key={k.label} style={{background:'var(--surface-1)',borderRadius:8,padding:'12px 14px',border:'0.5px solid var(--border)'}}>
               <div style={{fontSize:11,color:'var(--text-secondary)',marginBottom:4}}>{k.label}</div>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:26,fontWeight:700,color:k.c}}>{k.val}</div>
