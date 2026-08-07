@@ -958,13 +958,66 @@ function loadExternalScript(src,globalCheck){
   return p;
 }
 
-/** Builds the dynamic document-control fields shared by every header/footer draw call. */
+/** buildPdfDocMeta */
 function buildPdfDocMeta({ev,dm,typeInfo,isLicencia,roleLabel,subtitle}){
   return {
     org:'Bradken', proceso:'Capability & Training', region:'Chilca', tipo:'Form (blank)',
     titulo:`${typeInfo?.label||''}${isLicencia?` — ${roleLabel} ${subtitle}`:` — Verificación de Competencia — ${roleLabel}`}`,
     bknDoc:dm.bknDoc||ev.docCode||'', fecha:dm.fecha||'', revisadoPor:dm.revisadoPor||'', aprobadoPor:dm.aprobadoPor||'',
   };
+}
+
+/**
+ * computePdfPageBreaks(bodyEl) — measures the DOM (before any rasterizing) and
+ * decides where pages must break so a break NEVER falls inside a table row or
+ * a text line. Rules:
+ *  1. Every direct child of bodyEl (each section table, each caption) is an
+ *     atomic block that is never cut internally...
+ *  2. ...unless that single block is taller than a full page's content area,
+ *     in which case it is only split between its own <tr> rows.
+ *  3. A short "caption" block (e.g. "Tabla 1. Resumen de la revisión") is
+ *     glued to the block right after it, so a heading can never be stranded
+ *     alone at the bottom of a page while its table starts on the next one.
+ * Returns [{top,bottom}] in CSS px, relative to bodyEl's own top edge — ready
+ * to be converted to canvas px once the element is captured.
+ */
+function computePdfPageBreaks(bodyEl,{firstContentCSS,innerContentCSS}){
+  const bodyRect=bodyEl.getBoundingClientRect();
+  const rectOf=(el)=>{ const r=el.getBoundingClientRect(); return {top:r.top-bodyRect.top,height:r.height}; };
+  const maxUsableCSS=Math.min(firstContentCSS,innerContentCSS);
+
+  let atoms=[];
+  Array.from(bodyEl.children).forEach(child=>{
+    const b=rectOf(child);
+    if(b.height>maxUsableCSS && child.tagName==='TABLE'){
+      const trs=child.querySelectorAll('tr');
+      if(trs.length>1){ trs.forEach(tr=>atoms.push(rectOf(tr))); return; }
+    }
+    atoms.push(b);
+  });
+
+  const cssPxPerMM=bodyEl.scrollWidth/PDF_CONTENT_W;
+  const CAPTION_MAX_CSS=12*cssPxPerMM; // ~12mm — short heading/caption threshold
+  const glued=[];
+  for(let i=0;i<atoms.length;i++){
+    const a=atoms[i];
+    if(a.height<CAPTION_MAX_CSS && i+1<atoms.length){
+      const nxt=atoms[i+1];
+      glued.push({top:a.top,height:(nxt.top+nxt.height)-a.top});
+      i++;
+    } else glued.push(a);
+  }
+
+  const pages=[]; let curStart=null,curEnd=null,curBudget=firstContentCSS;
+  glued.forEach(a=>{
+    const bottom=a.top+a.height;
+    if(curStart===null){ curStart=a.top; curEnd=bottom; return; }
+    if(bottom-curStart<=curBudget){ curEnd=bottom; return; }
+    pages.push({top:curStart,bottom:curEnd});
+    curStart=a.top; curEnd=bottom; curBudget=innerContentCSS;
+  });
+  if(curStart!==null) pages.push({top:curStart,bottom:curEnd});
+  return pages.length?pages:[{top:0,bottom:0}];
 }
 
 /** CoverHeader() — page 1 only: corporate banner image (captured once, it's an SVG gradient) + printed-copy notice. Returns the Y where body content must start. */
@@ -1102,6 +1155,15 @@ function PrintView({ev,onClose,docMeta={}}){
       await loadExternalScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',()=>!!window.html2canvas);
       await loadExternalScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',()=>!!window.jspdf);
 
+      // ── 1) Measure the live DOM first, so page breaks land between elements
+      //        (or table rows), never mid-line/mid-cell. Reserve exact content
+      //        height per page type before anything gets rasterized. ──
+      const cssPxPerMM=bodyEl.scrollWidth/PDF_CONTENT_W;
+      const firstContentCSS=(PDF_PAGE_H-PDF_MARGIN*2-PDF_COVER_HEADER_H-PDF_COVER_FOOTER_H)*cssPxPerMM;
+      const innerContentCSS=(PDF_PAGE_H-PDF_MARGIN*2-PDF_DOC_HEADER_H-PDF_DOC_FOOTER_H)*cssPxPerMM;
+      const pagesCSS=computePdfPageBreaks(bodyEl,{firstContentCSS,innerContentCSS});
+
+      // ── 2) Capture chrome + body once ──
       const capture=(node)=>window.html2canvas(node,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false,windowWidth:node.scrollWidth});
       const [bannerCanvas,bodyCanvas]=await Promise.all([
         bannerEl?capture(bannerEl):Promise.resolve(null),
@@ -1114,30 +1176,24 @@ function PrintView({ev,onClose,docMeta={}}){
       const{jsPDF}=window.jspdf;
       const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
 
-      // ── Paginate: reserve exact header+footer height per page type, body content only ever fills what's left ──
+      // ── 3) Place each pre-measured slice — one PDF page per safe break ──
       const pxPerMM=bodyCanvas.width/PDF_CONTENT_W;
-      const bodyTotalMM=bodyCanvas.height/pxPerMM;
-      const firstContentH=PDF_PAGE_H-PDF_MARGIN*2-PDF_COVER_HEADER_H-PDF_COVER_FOOTER_H;
-      const innerContentH=PDF_PAGE_H-PDF_MARGIN*2-PDF_DOC_HEADER_H-PDF_DOC_FOOTER_H;
-      const pageHeightsMM=[Math.min(firstContentH,bodyTotalMM)];
-      let remaining=bodyTotalMM-pageHeightsMM[0];
-      while(remaining>0.5){ const h=Math.min(innerContentH,remaining); pageHeightsMM.push(h); remaining-=h; }
-      const totalPages=pageHeightsMM.length;
-
+      const captureScale=bodyCanvas.width/bodyEl.scrollWidth;
+      const totalPages=pagesCSS.length;
       const meta=buildPdfDocMeta({ev,dm,typeInfo,isLicencia,roleLabel,subtitle});
 
-      let srcYpx=0;
-      pageHeightsMM.forEach((hMM,idx)=>{
+      pagesCSS.forEach((pg,idx)=>{
         if(idx>0) pdf.addPage();
         const isFirst=idx===0;
         const contentTopY=isFirst?CoverHeader(pdf,bannerImgDataUrl):DocumentHeader(pdf,meta);
 
-        const srcHpx=Math.round(hMM*pxPerMM);
+        const srcYpx=Math.round(pg.top*captureScale);
+        const srcHpx=Math.max(1,Math.round((pg.bottom-pg.top)*captureScale));
+        const hMM=srcHpx/pxPerMM;
         const slice=document.createElement('canvas');
         slice.width=bodyCanvas.width; slice.height=srcHpx;
         slice.getContext('2d').drawImage(bodyCanvas,0,srcYpx,bodyCanvas.width,srcHpx,0,0,bodyCanvas.width,srcHpx);
         pdf.addImage(slice.toDataURL('image/jpeg',0.92),'JPEG',PDF_MARGIN,contentTopY,PDF_CONTENT_W,hMM);
-        srcYpx+=srcHpx;
 
         if(isFirst) CoverFooter(pdf,meta,idx+1,totalPages);
         else DocumentFooter(pdf,meta,idx+1,totalPages,logoDataUrl);
