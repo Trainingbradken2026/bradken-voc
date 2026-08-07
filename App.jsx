@@ -968,56 +968,61 @@ function buildPdfDocMeta({ev,dm,typeInfo,isLicencia,roleLabel,subtitle}){
 }
 
 /**
- * computePdfPageBreaks(bodyEl) — measures the DOM (before any rasterizing) and
- * decides where pages must break so a break NEVER falls inside a table row or
- * a text line. Rules:
- *  1. Every direct child of bodyEl (each section table, each caption) is an
- *     atomic block that is never cut internally...
- *  2. ...unless that single block is taller than a full page's content area,
- *     in which case it is only split between its own <tr> rows.
- *  3. A short "caption" block (e.g. "Tabla 1. Resumen de la revisión") is
- *     glued to the block right after it, so a heading can never be stranded
- *     alone at the bottom of a page while its table starts on the next one.
- * Returns [{top,bottom}] in CSS px, relative to bodyEl's own top edge — ready
- * to be converted to canvas px once the element is captured.
+ * computePdfPageBreaks(bodyEl, bodyCanvas, opts) — starts from plain uniform
+ * slicing (fills every page's reserved content height, exactly like a
+ * straightforward paginator) and only NUDGES each cut point to the nearest
+ * real element/table-row edge, so a cut lands between rows instead of
+ * through one. The nudge is capped (MAX_NUDGE_MM) and refuses to shrink a
+ * page below MIN_PAGE_FRACTION of its budget — so even if the DOM
+ * measurement is imperfect on a given device, the worst case is still a
+ * fully-packed page (same as before), never a mostly-blank one.
  */
-function computePdfPageBreaks(bodyEl,{firstContentCSS,innerContentCSS}){
-  const bodyRect=bodyEl.getBoundingClientRect();
-  const rectOf=(el)=>{ const r=el.getBoundingClientRect(); return {top:r.top-bodyRect.top,height:r.height}; };
-  const maxUsableCSS=Math.min(firstContentCSS,innerContentCSS);
+function computePdfPageBreaks(bodyEl,bodyCanvas,{pxPerMM,firstContentMM,innerContentMM}){
+  const bodyTotalMM=bodyCanvas.height/pxPerMM;
 
-  let atoms=[];
-  Array.from(bodyEl.children).forEach(child=>{
-    const b=rectOf(child);
-    if(b.height>maxUsableCSS && child.tagName==='TABLE'){
-      const trs=child.querySelectorAll('tr');
-      if(trs.length>1){ trs.forEach(tr=>atoms.push(rectOf(tr))); return; }
+  // 1) baseline: simple uniform ranges that always fully use the budget
+  const naive=[]; let used=0;
+  naive.push(Math.min(firstContentMM,bodyTotalMM-used)); used+=naive[naive.length-1];
+  while(used<bodyTotalMM-0.5){ const h=Math.min(innerContentMM,bodyTotalMM-used); naive.push(h); used+=h; }
+  let cum=0; const naiveRanges=naive.map(h=>{ const r={top:cum,bottom:cum+h}; cum+=h; return r; });
+  if(naiveRanges.length<2) return naiveRanges; // nothing to nudge
+
+  // 2) best-effort: collect real element/row edges (in mm) to snap cuts to
+  let edgeList=[];
+  try{
+    const bodyRect=bodyEl.getBoundingClientRect();
+    const cssPxPerMM=bodyEl.scrollWidth/PDF_CONTENT_W;
+    const edges=new Set();
+    const addEdges=(el,skipBottomIfShort)=>{
+      const r=el.getBoundingClientRect();
+      const topMM=(r.top-bodyRect.top)/cssPxPerMM;
+      const botMM=topMM+r.height/cssPxPerMM;
+      edges.add(Math.round(topMM*100)/100);
+      if(!(skipBottomIfShort && r.height/cssPxPerMM<12)) edges.add(Math.round(botMM*100)/100);
+    };
+    Array.from(bodyEl.children).forEach(child=>{
+      addEdges(child,true); // skip a short caption's own bottom edge, so it can't be split from what follows it
+      if(child.tagName==='TABLE') child.querySelectorAll('tr').forEach(tr=>addEdges(tr,false));
+    });
+    edgeList=Array.from(edges).filter(e=>e>0&&e<bodyTotalMM-0.5).sort((a,b)=>a-b);
+  }catch(e){ edgeList=[]; } // measurement failed for any reason — fall back to naive cuts
+
+  // 3) nudge each interior cut to the closest edge, within a safe bound
+  const MAX_NUDGE_MM=20, MIN_PAGE_FRACTION=0.6;
+  let prevBottom=0; const finalRanges=[];
+  naiveRanges.forEach((nr,idx)=>{
+    const budget=nr.bottom-nr.top, isLast=idx===naiveRanges.length-1;
+    let target=nr.bottom;
+    if(!isLast&&edgeList.length){
+      let best=null,bestDist=Infinity;
+      edgeList.forEach(e=>{ const d=Math.abs(e-nr.bottom); if(d<bestDist&&d<=MAX_NUDGE_MM){bestDist=d;best=e;} });
+      if(best!==null&&best>prevBottom+budget*MIN_PAGE_FRACTION) target=best;
     }
-    atoms.push(b);
+    if(isLast) target=bodyTotalMM;
+    finalRanges.push({top:prevBottom,bottom:target});
+    prevBottom=target;
   });
-
-  const cssPxPerMM=bodyEl.scrollWidth/PDF_CONTENT_W;
-  const CAPTION_MAX_CSS=12*cssPxPerMM; // ~12mm — short heading/caption threshold
-  const glued=[];
-  for(let i=0;i<atoms.length;i++){
-    const a=atoms[i];
-    if(a.height<CAPTION_MAX_CSS && i+1<atoms.length){
-      const nxt=atoms[i+1];
-      glued.push({top:a.top,height:(nxt.top+nxt.height)-a.top});
-      i++;
-    } else glued.push(a);
-  }
-
-  const pages=[]; let curStart=null,curEnd=null,curBudget=firstContentCSS;
-  glued.forEach(a=>{
-    const bottom=a.top+a.height;
-    if(curStart===null){ curStart=a.top; curEnd=bottom; return; }
-    if(bottom-curStart<=curBudget){ curEnd=bottom; return; }
-    pages.push({top:curStart,bottom:curEnd});
-    curStart=a.top; curEnd=bottom; curBudget=innerContentCSS;
-  });
-  if(curStart!==null) pages.push({top:curStart,bottom:curEnd});
-  return pages.length?pages:[{top:0,bottom:0}];
+  return finalRanges;
 }
 
 /** CoverHeader() — page 1 only: corporate banner image (captured once, it's an SVG gradient) + printed-copy notice. Returns the Y where body content must start. */
@@ -1155,15 +1160,9 @@ function PrintView({ev,onClose,docMeta={}}){
       await loadExternalScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',()=>!!window.html2canvas);
       await loadExternalScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',()=>!!window.jspdf);
 
-      // ── 1) Measure the live DOM first, so page breaks land between elements
-      //        (or table rows), never mid-line/mid-cell. Reserve exact content
-      //        height per page type before anything gets rasterized. ──
-      const cssPxPerMM=bodyEl.scrollWidth/PDF_CONTENT_W;
-      const firstContentCSS=(PDF_PAGE_H-PDF_MARGIN*2-PDF_COVER_HEADER_H-PDF_COVER_FOOTER_H)*cssPxPerMM;
-      const innerContentCSS=(PDF_PAGE_H-PDF_MARGIN*2-PDF_DOC_HEADER_H-PDF_DOC_FOOTER_H)*cssPxPerMM;
-      const pagesCSS=computePdfPageBreaks(bodyEl,{firstContentCSS,innerContentCSS});
-
-      // ── 2) Capture chrome + body once ──
+      // ── 1) Capture chrome + body once. This raster is the ground truth for
+      //        how tall the content actually is — everything else is derived
+      //        from it, so pagination can never disagree with what gets drawn. ──
       const capture=(node)=>window.html2canvas(node,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false,windowWidth:node.scrollWidth});
       const [bannerCanvas,bodyCanvas]=await Promise.all([
         bannerEl?capture(bannerEl):Promise.resolve(null),
@@ -1176,19 +1175,24 @@ function PrintView({ev,onClose,docMeta={}}){
       const{jsPDF}=window.jspdf;
       const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
 
-      // ── 3) Place each pre-measured slice — one PDF page per safe break ──
+      // ── 2) Paginate in mm (reliable baseline), then nudge cuts to nearby
+      //        element/row edges so they don't land mid-line. ──
       const pxPerMM=bodyCanvas.width/PDF_CONTENT_W;
-      const captureScale=bodyCanvas.width/bodyEl.scrollWidth;
-      const totalPages=pagesCSS.length;
+      const firstContentMM=PDF_PAGE_H-PDF_MARGIN*2-PDF_COVER_HEADER_H-PDF_COVER_FOOTER_H;
+      const innerContentMM=PDF_PAGE_H-PDF_MARGIN*2-PDF_DOC_HEADER_H-PDF_DOC_FOOTER_H;
+      const pagesMM=computePdfPageBreaks(bodyEl,bodyCanvas,{pxPerMM,firstContentMM,innerContentMM});
+
+      // ── 3) Place each slice ──
+      const totalPages=pagesMM.length;
       const meta=buildPdfDocMeta({ev,dm,typeInfo,isLicencia,roleLabel,subtitle});
 
-      pagesCSS.forEach((pg,idx)=>{
+      pagesMM.forEach((pg,idx)=>{
         if(idx>0) pdf.addPage();
         const isFirst=idx===0;
         const contentTopY=isFirst?CoverHeader(pdf,bannerImgDataUrl):DocumentHeader(pdf,meta);
 
-        const srcYpx=Math.round(pg.top*captureScale);
-        const srcHpx=Math.max(1,Math.round((pg.bottom-pg.top)*captureScale));
+        const srcYpx=Math.round(pg.top*pxPerMM);
+        const srcHpx=Math.max(1,Math.round((pg.bottom-pg.top)*pxPerMM));
         const hMM=srcHpx/pxPerMM;
         const slice=document.createElement('canvas');
         slice.width=bodyCanvas.width; slice.height=srcHpx;
