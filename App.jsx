@@ -918,225 +918,6 @@ function ResultBadge({r}){
   </span>;
 }
 
-// ════════════════════════════════════════════════════════════════════════
-// BRADKEN CORPORATE PDF CHROME — single source of truth for header/footer.
-//
-// These functions draw directly on the jsPDF canvas (native text/rects),
-// not screenshots of the DOM. That is what makes them behave like a real
-// Header/Footer: identical position, size and spacing on every page, a
-// content area whose height is reserved in advance so body content can
-// never invade them, and dynamic fields (page X of Y, doc code, dates,
-// reviewer/approver) computed automatically from docMeta.
-//
-// Reused by ANY document exported from this app — never re-implemented
-// per document type. To change the corporate header/footer everywhere,
-// edit only this block.
-// ════════════════════════════════════════════════════════════════════════
-const PDF_PAGE_W=210, PDF_PAGE_H=297, PDF_MARGIN=10;               // A4, mm
-const PDF_CONTENT_W=PDF_PAGE_W-PDF_MARGIN*2;                       // 190mm
-const PDF_COVER_HEADER_H=32;   // banner + printed-copy notice — page 1 only
-const PDF_COVER_FOOTER_H=46;   // copyright/confidential + doc-control table — page 1 only
-const PDF_DOC_HEADER_H=35;     // repeating header block — page 2..N
-const PDF_DOC_FOOTER_H=22;     // repeating footer block — page 2..N
-const PDF_BORDER=[200,212,232], PDF_LBL=[0,85,150], PDF_TXT=[20,20,20], PDF_GREY=[85,85,85];
-
-const PDF_CONFIDENTIAL_TXT="This document, including any attachments, is confidential and may contain commercially sensitive information. Please notify Bradken if you have received this document in error. Any unauthorised use of this document or anything contained in it is expressly prohibited.";
-const PDF_UNCONTROLLED_TXT="Uncontrolled Copy if it has been printed or downloaded outside a validated copy control register";
-const PDF_PRINTED_COPY_TXT="Si este documento se ha impreso o descargado, se convierte inmediatamente en una copia no controlada y no puede utilizarse ni consultarse en ningún requisito operativo a menos que se utilice un registro de control de copias validado o un sistema equivalente.";
-
-/** Loads an external script once and caches the promise on window so repeated PDF exports don't re-fetch it. */
-function loadExternalScript(src,globalCheck){
-  if(globalCheck()) return Promise.resolve();
-  window.__bkScriptLoads=window.__bkScriptLoads||{};
-  if(window.__bkScriptLoads[src]) return window.__bkScriptLoads[src];
-  const p=new Promise((res,rej)=>{
-    const el=document.createElement('script');
-    el.src=src; el.onload=res; el.onerror=rej;
-    document.head.appendChild(el);
-  });
-  window.__bkScriptLoads[src]=p;
-  return p;
-}
-
-/** buildPdfDocMeta */
-function buildPdfDocMeta({ev,dm,typeInfo,isLicencia,roleLabel,subtitle}){
-  return {
-    org:'Bradken', proceso:'Capability & Training', region:'Chilca', tipo:'Form (blank)',
-    titulo:`${typeInfo?.label||''}${isLicencia?` — ${roleLabel} ${subtitle}`:` — Verificación de Competencia — ${roleLabel}`}`,
-    bknDoc:dm.bknDoc||ev.docCode||'', fecha:dm.fecha||'', revisadoPor:dm.revisadoPor||'', aprobadoPor:dm.aprobadoPor||'',
-  };
-}
-
-/**
- * computePdfPageBreaks(bodyEl, bodyCanvas, opts) — starts from plain uniform
- * slicing (fills every page's reserved content height, exactly like a
- * straightforward paginator) and only NUDGES each cut point to the nearest
- * real element/table-row edge, so a cut lands between rows instead of
- * through one. The nudge is capped (MAX_NUDGE_MM) and refuses to shrink a
- * page below MIN_PAGE_FRACTION of its budget — so even if the DOM
- * measurement is imperfect on a given device, the worst case is still a
- * fully-packed page (same as before), never a mostly-blank one.
- */
-function computePdfPageBreaks(bodyEl,bodyCanvas,{pxPerMM,firstContentMM,innerContentMM}){
-  const bodyTotalMM=bodyCanvas.height/pxPerMM;
-
-  // 1) baseline: simple uniform ranges that always fully use the budget
-  const naive=[]; let used=0;
-  naive.push(Math.min(firstContentMM,bodyTotalMM-used)); used+=naive[naive.length-1];
-  while(used<bodyTotalMM-0.5){ const h=Math.min(innerContentMM,bodyTotalMM-used); naive.push(h); used+=h; }
-  let cum=0; const naiveRanges=naive.map(h=>{ const r={top:cum,bottom:cum+h}; cum+=h; return r; });
-  if(naiveRanges.length<2) return naiveRanges; // nothing to nudge
-
-  // 2) best-effort: collect real element/row edges (in mm) to snap cuts to
-  let edgeList=[];
-  try{
-    const bodyRect=bodyEl.getBoundingClientRect();
-    const cssPxPerMM=bodyEl.scrollWidth/PDF_CONTENT_W;
-    const edges=new Set();
-    const addEdges=(el,skipBottomIfShort)=>{
-      const r=el.getBoundingClientRect();
-      const topMM=(r.top-bodyRect.top)/cssPxPerMM;
-      const botMM=topMM+r.height/cssPxPerMM;
-      edges.add(Math.round(topMM*100)/100);
-      if(!(skipBottomIfShort && r.height/cssPxPerMM<12)) edges.add(Math.round(botMM*100)/100);
-    };
-    Array.from(bodyEl.children).forEach(child=>{
-      addEdges(child,true); // skip a short caption's own bottom edge, so it can't be split from what follows it
-      if(child.tagName==='TABLE') child.querySelectorAll('tr').forEach(tr=>addEdges(tr,false));
-    });
-    edgeList=Array.from(edges).filter(e=>e>0&&e<bodyTotalMM-0.5).sort((a,b)=>a-b);
-  }catch(e){ edgeList=[]; } // measurement failed for any reason — fall back to naive cuts
-
-  // 3) nudge each interior cut to the closest edge, within a safe bound
-  const MAX_NUDGE_MM=20, MIN_PAGE_FRACTION=0.6;
-  let prevBottom=0; const finalRanges=[];
-  naiveRanges.forEach((nr,idx)=>{
-    const budget=nr.bottom-nr.top, isLast=idx===naiveRanges.length-1;
-    let target=nr.bottom;
-    if(!isLast&&edgeList.length){
-      let best=null,bestDist=Infinity;
-      edgeList.forEach(e=>{ const d=Math.abs(e-nr.bottom); if(d<bestDist&&d<=MAX_NUDGE_MM){bestDist=d;best=e;} });
-      if(best!==null&&best>prevBottom+budget*MIN_PAGE_FRACTION) target=best;
-    }
-    if(isLast) target=bodyTotalMM;
-    finalRanges.push({top:prevBottom,bottom:target});
-    prevBottom=target;
-  });
-  return finalRanges;
-}
-
-/** CoverHeader() — page 1 only: corporate banner image (captured once, it's an SVG gradient) + printed-copy notice. Returns the Y where body content must start. */
-function CoverHeader(pdf,bannerImgDataUrl){
-  const y0=PDF_MARGIN, imgH=19;
-  if(bannerImgDataUrl) pdf.addImage(bannerImgDataUrl,'PNG',PDF_MARGIN,y0,PDF_CONTENT_W,imgH);
-  pdf.setFont('helvetica','normal'); pdf.setFontSize(7); pdf.setTextColor(...PDF_GREY);
-  pdf.text(pdf.splitTextToSize(PDF_PRINTED_COPY_TXT,PDF_CONTENT_W),PDF_MARGIN,y0+imgH+4);
-  return y0+PDF_COVER_HEADER_H;
-}
-
-/** DocumentHeader() — repeating header for page 2..N. Fixed size/position/spacing on every call — never varies. Returns the Y where body content must start. */
-function DocumentHeader(pdf,meta){
-  const y0=PDF_MARGIN, colW=PDF_CONTENT_W/4;
-  pdf.setFillColor(0,40,74); pdf.rect(PDF_MARGIN,y0,PDF_CONTENT_W,3.2,'F');
-  let y=y0+3.2;
-
-  pdf.setDrawColor(...PDF_BORDER); pdf.setLineWidth(0.15);
-  [['Organización:',meta.org],['Proceso:',meta.proceso],['Region:',meta.region],['Tipo de documento:',meta.tipo]]
-    .forEach((c,i)=>{
-      const x=PDF_MARGIN+i*colW;
-      pdf.rect(x,y,colW,9.5);
-      pdf.setFont('helvetica','bold'); pdf.setFontSize(7); pdf.setTextColor(...PDF_LBL);
-      pdf.text(c[0],x+2,y+3.6);
-      pdf.setFont('helvetica','normal'); pdf.setFontSize(8); pdf.setTextColor(...PDF_TXT);
-      pdf.text(String(c[1]||''),x+2,y+7.4);
-    });
-  y+=9.5;
-
-  pdf.rect(PDF_MARGIN,y,PDF_CONTENT_W,8);
-  pdf.setFont('helvetica','bold'); pdf.setFontSize(7); pdf.setTextColor(...PDF_LBL);
-  pdf.text('Título del Documento:',PDF_MARGIN+2,y+3.6);
-  pdf.setFont('helvetica','bold'); pdf.setFontSize(8); pdf.setTextColor(...PDF_TXT);
-  pdf.text(pdf.splitTextToSize(meta.titulo||'',PDF_CONTENT_W-4)[0]||'',PDF_MARGIN+2,y+7);
-  y+=8;
-
-  [['BKN Doc & Revisión:',meta.bknDoc],['Fecha:',meta.fecha],['Revisado por:',meta.revisadoPor],['Aprobado por:',meta.aprobadoPor]]
-    .forEach((c,i)=>{
-      const x=PDF_MARGIN+i*colW;
-      pdf.rect(x,y,colW,8);
-      pdf.setFont('helvetica','bold'); pdf.setFontSize(7); pdf.setTextColor(...PDF_LBL);
-      pdf.text(c[0],x+2,y+3.4);
-      pdf.setFont('helvetica','normal'); pdf.setFontSize(7.5); pdf.setTextColor(...PDF_TXT);
-      pdf.text(String(c[1]||''),x+2,y+6.6);
-    });
-  y+=8;
-
-  pdf.setFont('helvetica','normal'); pdf.setFontSize(6.8); pdf.setTextColor(...PDF_GREY);
-  pdf.text(PDF_UNCONTROLLED_TXT,PDF_MARGIN,y+3);
-
-  return y0+PDF_DOC_HEADER_H;
-}
-
-/** DocumentFooter() — repeating footer for page 2..N: copyright/page number + confidentiality notice + logo. Position is always PAGE_H - MARGIN - FOOTER_H, so it never depends on content length. */
-function DocumentFooter(pdf,meta,pageNum,totalPages,logoDataUrl){
-  const y=PDF_PAGE_H-PDF_MARGIN-PDF_DOC_FOOTER_H;
-  pdf.setDrawColor(225,225,225); pdf.setLineWidth(0.1);
-  pdf.line(PDF_MARGIN,y,PDF_MARGIN+PDF_CONTENT_W,y);
-  let ty=y+4;
-  pdf.setFont('helvetica','bold'); pdf.setFontSize(7.5); pdf.setTextColor(30,30,30);
-  pdf.text('© Bradken Pty Limited 2026',PDF_MARGIN,ty);
-  const w1=pdf.getTextWidth('© Bradken Pty Limited 2026');
-  pdf.setFont('helvetica','normal');
-  pdf.text(`  l  ABN 33 108 693 009  l  Page: ${pageNum} of ${totalPages}  l `,PDF_MARGIN+w1,ty);
-
-  ty+=4;
-  pdf.setFont('helvetica','bold'); pdf.setFontSize(7);
-  pdf.text('Confidential Internal Use Only:',PDF_MARGIN,ty);
-  ty+=3.2;
-  pdf.setFont('helvetica','normal'); pdf.setFontSize(6.8); pdf.setTextColor(60,60,60);
-  pdf.text(pdf.splitTextToSize(PDF_CONFIDENTIAL_TXT,PDF_CONTENT_W-42),PDF_MARGIN,ty);
-
-  if(logoDataUrl){
-    const logoW=26, logoH=26*102/426; // matches the source logo's native aspect ratio
-    pdf.addImage(logoDataUrl,'PNG',PDF_MARGIN+PDF_CONTENT_W-logoW,y+2,logoW,logoH);
-  }
-}
-
-/** CoverFooter() — page 1 only: copyright/page/doc-code + confidentiality notice + the document-control table (Organización/Proceso/Región/Tipo + BKN Doc/Fecha/Revisado/Aprobado). */
-function CoverFooter(pdf,meta,pageNum,totalPages){
-  const y=PDF_PAGE_H-PDF_MARGIN-PDF_COVER_FOOTER_H;
-  pdf.setDrawColor(0,85,150); pdf.setLineWidth(0.4);
-  pdf.line(PDF_MARGIN,y,PDF_MARGIN+PDF_CONTENT_W,y);
-  let ty=y+4;
-  pdf.setFont('helvetica','bold'); pdf.setFontSize(7.5); pdf.setTextColor(30,30,30);
-  pdf.text('© Bradken Pty Limited 2026',PDF_MARGIN,ty);
-  const w1=pdf.getTextWidth('© Bradken Pty Limited 2026');
-  pdf.setFont('helvetica','normal');
-  pdf.text(`  l  ABN 33 108 693 009  l  Page: ${pageNum} of ${totalPages}  l  ${meta.bknDoc||''}`,PDF_MARGIN+w1,ty);
-
-  ty+=4.2;
-  pdf.setFont('helvetica','bold'); pdf.setFontSize(7);
-  pdf.text('Confidential Internal Use Only:',PDF_MARGIN,ty);
-  ty+=3.2;
-  pdf.setFont('helvetica','normal'); pdf.setFontSize(6.8); pdf.setTextColor(60,60,60);
-  const lines=pdf.splitTextToSize(PDF_CONFIDENTIAL_TXT,PDF_CONTENT_W);
-  pdf.text(lines,PDF_MARGIN,ty);
-  ty+=lines.length*3.1+2;
-
-  const colW=PDF_CONTENT_W/4, rowH=8;
-  [
-    [['Organización:',meta.org],['Proceso:',meta.proceso],['Region:',meta.region],['Tipo de documento:',meta.tipo]],
-    [['BKN Doc & Revision:',meta.bknDoc],['Fecha:',meta.fecha],['Revisado por:',meta.revisadoPor],['Aprobado por:',meta.aprobadoPor]],
-  ].forEach((row,ri)=>row.forEach((c,ci)=>{
-    const x=PDF_MARGIN+ci*colW, yy=ty+ri*rowH;
-    pdf.setDrawColor(...PDF_BORDER); pdf.setLineWidth(0.15);
-    pdf.rect(x,yy,colW,rowH);
-    pdf.setFont('helvetica','bold'); pdf.setFontSize(7); pdf.setTextColor(...PDF_LBL);
-    pdf.text(c[0],x+2,yy+3.4);
-    pdf.setFont('helvetica','normal'); pdf.setFontSize(7.5); pdf.setTextColor(...PDF_TXT);
-    pdf.text(String(c[1]||''),x+2,yy+6.6);
-  }));
-}
-
 function PrintView({ev,onClose,docMeta={}}){
   const dm={...DOC_META_DEFAULTS[ev?.type||''],...docMeta};
   const [pdfLoading,setPdfLoading]=useState(false);
@@ -1152,57 +933,45 @@ function PrintView({ev,onClose,docMeta={}}){
   const today2=()=>new Date().toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
 
   async function handlePDF(){
-    const bannerEl=document.getElementById('pdf-cover-banner');
-    const bodyEl=document.getElementById('pdf-body-content');
-    if(!bodyEl){setPdfError('Contenido no encontrado.');return;}
+    const el=document.getElementById('bradken-print-doc');
+    if(!el){setPdfError('Contenido no encontrado.');return;}
     setPdfLoading(true); setPdfError('');
     try{
-      await loadExternalScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',()=>!!window.html2canvas);
-      await loadExternalScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',()=>!!window.jspdf);
-
-      // ── 1) Capture chrome + body once. This raster is the ground truth for
-      //        how tall the content actually is — everything else is derived
-      //        from it, so pagination can never disagree with what gets drawn. ──
-      const capture=(node)=>window.html2canvas(node,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false,windowWidth:node.scrollWidth});
-      const [bannerCanvas,bodyCanvas]=await Promise.all([
-        bannerEl?capture(bannerEl):Promise.resolve(null),
-        capture(bodyEl),
-      ]);
-      const bannerImgDataUrl=bannerCanvas?bannerCanvas.toDataURL('image/png'):null;
-      const logoEl=document.querySelector('#bradken-print-doc img[alt="Bradken"]');
-      const logoDataUrl=logoEl?logoEl.src:null;
-
+      await new Promise((res,rej)=>{
+        if(window.html2canvas){res();return;}
+        const s=document.createElement('script');
+        s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+        s.onload=res; s.onerror=rej; document.head.appendChild(s);
+      });
+      await new Promise((res,rej)=>{
+        if(window.jspdf){res();return;}
+        const s=document.createElement('script');
+        s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        s.onload=res; s.onerror=rej; document.head.appendChild(s);
+      });
+      const canvas=await window.html2canvas(el,{
+        scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false,
+        windowWidth:el.scrollWidth,windowHeight:el.scrollHeight
+      });
       const{jsPDF}=window.jspdf;
       const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-
-      // ── 2) Paginate in mm (reliable baseline), then nudge cuts to nearby
-      //        element/row edges so they don't land mid-line. ──
-      const pxPerMM=bodyCanvas.width/PDF_CONTENT_W;
-      const firstContentMM=PDF_PAGE_H-PDF_MARGIN*2-PDF_COVER_HEADER_H-PDF_COVER_FOOTER_H;
-      const innerContentMM=PDF_PAGE_H-PDF_MARGIN*2-PDF_DOC_HEADER_H-PDF_DOC_FOOTER_H;
-      const pagesMM=computePdfPageBreaks(bodyEl,bodyCanvas,{pxPerMM,firstContentMM,innerContentMM});
-
-      // ── 3) Place each slice ──
-      const totalPages=pagesMM.length;
-      const meta=buildPdfDocMeta({ev,dm,typeInfo,isLicencia,roleLabel,subtitle});
-
-      pagesMM.forEach((pg,idx)=>{
-        if(idx>0) pdf.addPage();
-        const isFirst=idx===0;
-        const contentTopY=isFirst?CoverHeader(pdf,bannerImgDataUrl):DocumentHeader(pdf,meta);
-
-        const srcYpx=Math.round(pg.top*pxPerMM);
-        const srcHpx=Math.max(1,Math.round((pg.bottom-pg.top)*pxPerMM));
-        const hMM=srcHpx/pxPerMM;
-        const slice=document.createElement('canvas');
-        slice.width=bodyCanvas.width; slice.height=srcHpx;
-        slice.getContext('2d').drawImage(bodyCanvas,0,srcYpx,bodyCanvas.width,srcHpx,0,0,bodyCanvas.width,srcHpx);
-        pdf.addImage(slice.toDataURL('image/jpeg',0.92),'JPEG',PDF_MARGIN,contentTopY,PDF_CONTENT_W,hMM);
-
-        if(isFirst) CoverFooter(pdf,meta,idx+1,totalPages);
-        else DocumentFooter(pdf,meta,idx+1,totalPages,logoDataUrl);
-      });
-
+      const pw=pdf.internal.pageSize.getWidth();
+      const ph=pdf.internal.pageSize.getHeight();
+      const margin=10;
+      const cw=pw-margin*2;
+      const ratio=cw/canvas.width;
+      const fullH=canvas.height*ratio;
+      const totalPages=Math.ceil(fullH/ph);
+      for(let p=0;p<totalPages;p++){
+        if(p>0) pdf.addPage();
+        const srcY=Math.floor((p*ph)/ratio);
+        const srcH=Math.min(Math.floor(ph/ratio),canvas.height-srcY);
+        if(srcH<=0) break;
+        const pc=document.createElement('canvas');
+        pc.width=canvas.width; pc.height=srcH;
+        pc.getContext('2d').drawImage(canvas,0,srcY,canvas.width,srcH,0,0,canvas.width,srcH);
+        pdf.addImage(pc.toDataURL('image/jpeg',0.92),'JPEG',margin,0,cw,srcH*ratio);
+      }
       const nom=`VOC_${(ev.type||'').toUpperCase()}_${(ev.participant.nombres||'').replace(/\s+/g,'_')}_${ev.id}.pdf`;
       try{
         pdf.save(nom);
@@ -1271,7 +1040,7 @@ function PrintView({ev,onClose,docMeta={}}){
     <div id="bradken-print-doc" style={{background:'#fff',padding:'4px'}}>
 
     {/* ══ PAGE 1 HEADER: Diagonal blue banner + logo (SVG-based for html2canvas compatibility) ══ */}
-    <div id="pdf-cover-banner" style={{position:'relative',width:'100%',height:76,marginBottom:8}}>
+    <div style={{position:'relative',width:'100%',height:76,marginBottom:8}}>
       <svg width="100%" height="76" viewBox="0 0 800 76" preserveAspectRatio="none"
            style={{position:'absolute',top:0,left:0}}>
         <defs>
@@ -1297,7 +1066,6 @@ function PrintView({ev,onClose,docMeta={}}){
       Si este documento se ha impreso o descargado, se convierte inmediatamente en una copia no controlada y no puede utilizarse ni consultarse en ningún requisito operativo a menos que se utilice un registro de control de copias validado o un sistema equivalente.
     </p>
 
-    <div id="pdf-body-content">
     {/* ── DOCUMENT TITLE SECTION ── */}
     <div style={{marginBottom:14}}>
       <div style={{fontFamily:'Arial,sans-serif',fontSize:22,fontWeight:700,color:'#005596',marginBottom:2,lineHeight:1.2}}>
@@ -1494,14 +1262,51 @@ function PrintView({ev,onClose,docMeta={}}){
         <C>{dm.rev||'1'}</C><C>{dm.fechaEmision||'30-Jun-26'}</C><C>{dm.clausula||'Emisión inicial – formato Bradken Chilca.'}</C><C>{dm.revisadoPor||'avera'}</C><C>{dm.aprobadoPor||'hramamurthi'}</C>
       </tr>
     </tbody></table>
-    </div>{/* end pdf-body-content */}
 
-    {/* El encabezado y pie de página institucionales (con numeración de página automática,
-        franja Organización/Proceso/Región/Tipo, y tabla de control documental) se generan
-        de forma nativa en cada página del PDF descargado — ver CoverHeader/DocumentHeader/
-        DocumentFooter/CoverFooter, no se renderizan aquí para evitar duplicarlos. */}
-    <div className="no-print" style={{marginTop:10,padding:'8px 12px',background:'#F0F4FA',border:'1px dashed #C8D4E8',borderRadius:6,fontSize:11,color:'#556'}}>
-      ℹ El encabezado, pie de página y numeración (Page X of Y) se agregan automáticamente al generar el PDF, igual en todas las páginas.
+    {/* ══ BOTTOM META TABLE (Organización / Título / BKN Doc) ══ */}
+    <table style={{width:'100%',borderCollapse:'collapse',marginTop:8,marginBottom:4,border:'1px solid #C8D8EC'}}><tbody>
+      <tr>
+        {['Organización','Proceso','Región','Tipo de documento'].map((lbl,i)=>(
+          <td key={i} style={{border:'1px solid #C8D8EC',padding:'6px 10px',width:'25%',verticalAlign:'top'}}>
+            <div style={{fontSize:9,color:'#888',marginBottom:2}}>{lbl}:</div>
+            <div style={{fontSize:11,fontWeight:700,color:'#111'}}>
+              {['Bradken','Capability & Training','Chilca','Form (blank)'][i]}
+            </div>
+          </td>
+        ))}
+      </tr>
+      <tr>
+        <td colSpan={4} style={{border:'1px solid #C8D8EC',padding:'6px 10px'}}>
+          <span style={{fontSize:10,color:'#888'}}>Título del Documento: </span>
+          <span style={{fontSize:11,fontWeight:700,color:'#111'}}>
+            {typeInfo?.label}{isLicencia?` — ${roleLabel} ${subtitle}`:` — Verificación de Competencia — ${roleLabel}`}
+          </span>
+        </td>
+      </tr>
+      <tr>
+        {[
+          ['BKN Doc & Revisión',dm.bknDoc||ev.docCode],
+          ['Fecha',dm.fecha||'30-Jun-26'],
+          ['Revisado por',dm.revisadoPor||'avera'],
+          ['Aprobado por',dm.aprobadoPor||'hramamurthi'],
+        ].map(([lbl,val],i)=>(
+          <td key={i} style={{border:'1px solid #C8D8EC',padding:'6px 10px',verticalAlign:'top'}}>
+            <span style={{fontSize:10,color:'#888'}}>{lbl}: </span>
+            <span style={{fontSize:11,fontWeight:700,color:'#111'}}>{val}</span>
+          </td>
+        ))}
+      </tr>
+    </tbody></table>
+
+    {/* ── FOOTER ── */}
+    <div style={{borderTop:`2px solid ${BK}`,paddingTop:6,marginTop:4}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <div style={{fontSize:9,color:'#555',lineHeight:1.5}}>
+          <b>© Bradken Pty Limited 2026</b> l ABN 33 108 693 009 l Código de evaluación: <b>{ev.id}</b><br/>
+          <b>Solo para uso interno confidencial:</b> Este documento es confidencial y puede contener información comercial sensible. Queda expresamente prohibido cualquier uso no autorizado.
+        </div>
+        <BradkenLogo/>
+      </div>
     </div>
 
     </div>{/* end bradken-print-doc */}
@@ -1916,7 +1721,7 @@ export default function App(){
             icon:<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
             color:'#0F766E',bg:'#F0FDFA',
             title:'Soy Evaluado',
-            sub:'Revisar y aprobar mi evaluación con mi código',
+            sub:'Revisar y aceptar mi evaluación con mi código',
             target:'approve:enter'
           }].map(x=><button key={x.id} onClick={()=>x.action?x.action():setView(x.target)}
             style={{...s.card,cursor:'pointer',textAlign:'left',padding:'20px',border:`1px solid ${BD}`,transition:'border-color .15s,box-shadow .15s'}}
@@ -2397,7 +2202,7 @@ export default function App(){
         <div style={{fontSize:40,marginBottom:12}}>✅</div>
         <h2 style={{...s.h1,marginBottom:4}}>Evaluación registrada</h2>
         <p style={{color:T2,marginBottom:20}}>
-          Comparte este código con <b>{ev.participant.nombres} {ev.participant.apellidos}</b> para que pueda revisar y aprobar su evaluación.
+          Comparte este código con <b>{ev.participant.nombres} {ev.participant.apellidos}</b> para que pueda revisar y aceptar su evaluación.
         </p>
         <div style={{marginBottom:20}}>
           <p style={{fontSize:13,color:T2,marginBottom:8}}>Código de evaluación</p>
@@ -2411,7 +2216,7 @@ export default function App(){
           const msg=encodeURIComponent(
             `Hola ${nombre}, tu evaluación de competencias *${tipo}* en Bradken Chilca ha sido registrada.\n\n` +
             `Tu código de acceso es: *${ev.id}*\n\n` +
-            `Ingresa a https://bradken-voc.vercel.app, selecciona "Soy Evaluado" e ingresa tu código para revisar y aprobar tu evaluación.\n\n` +
+            `Ingresa a https://bradken-voc.vercel.app, selecciona "Soy Evaluado" e ingresa tu código para revisar y aceptar tu evaluación.\n\n` +
             `— Equipo Training Bradken Chilca`
           );
           const phone=(ev.participant.telefono||'').replace(/\D/g,'');
@@ -3049,12 +2854,12 @@ function ApproverView({ev,onApprove,onPrint,onBack}){
       <p style={{fontSize:13,color:'var(--text-secondary)',margin:0}}>{ev.comments}</p>
     </div>}
     <div style={{...s.card,background:'var(--surface-1)'}}>
-      <h3 style={{...s.h2,fontSize:16,marginBottom:12}}>Confirmar revisión y aprobar</h3>
-      <p style={{fontSize:13,color:'var(--text-secondary)',marginBottom:14}}>Al aprobar, confirmas que revisaste los resultados de tu evaluación y estás de acuerdo con el proceso realizado.</p>
+      <h3 style={{...s.h2,fontSize:16,marginBottom:12}}>Confirmar revisión y Aceptar</h3>
+      <p style={{fontSize:13,color:'var(--text-secondary)',marginBottom:14}}>Al aceptar, confirmas que revisaste los resultados de tu evaluación y estás de acuerdo con el proceso realizado.</p>
       <label style={s.label}>Tu nombre completo</label>
       <input style={{...s.input,marginBottom:12}} value={name} onChange={e=>setName(e.target.value)}/>
       <div style={{display:'flex',gap:10}}>
-        <button style={{...s.btnPrimary,flex:1}} onClick={()=>onApprove(name)}>✅ Aprobar evaluación</button>
+        <button style={{...s.btnPrimary,flex:1}} onClick={()=>onApprove(name)}>✅ Aceptar Evaluación</button>
         <button style={s.btn} onClick={onPrint}>🖨 Imprimir</button>
       </div>
     </div>
