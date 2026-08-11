@@ -1514,6 +1514,8 @@ export default function App(){
   const [keepaliveMsg,setKeepaliveMsg]=useState('');
   const [formTemplates,setFormTemplates]=useState([]);
   const [formSections,setFormSections]=useState([]);
+  const [editTemplate,setEditTemplate]=useState(null);
+  const [editSections,setEditSections]=useState([]);
   const [pinInput,setPinInput]=useState('');
   const [pinError,setPinError]=useState('');
   const [pinVisible,setPinVisible]=useState(false);
@@ -2412,9 +2414,19 @@ export default function App(){
               </div>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T3} strokeWidth="2" style={{marginLeft:'auto',flexShrink:0}}><polyline points="9 18 15 12 9 6"/></svg>
             </button>);})}
+            <button onClick={async()=>{
+                const{data:tmplData}=await supabase.from('form_templates').select('*').eq('type_id',t.id).single();
+                const{data:secsData}=await supabase.from('form_sections').select('*, form_items(*)').eq('template_id',tmplData?.id).order('order_index');
+                setEditTemplate(tmplData);setEditSections(secsData||[]);setView('admin:editform');
+              }}
+              style={{...s.btnSm,display:'flex',alignItems:'center',gap:4,color:'#005596',borderColor:'#005596',marginTop:4}}>
+              ✏ Editar formulario
+            </button>
           </div>
         </div>)}
       </div>}
+
+      {view==='admin:editform'&&editTemplate&&<FormBuilder onBack={()=>setView('admin:forms')} supabase={supabase} loadFormsDB={loadFormsDB} s={s} TX={TX} T2={T2} T3={T3} BD={BD} SF={SF} S2={S2} BRAND={BRAND} G={G} R={R} AM={AM} GBD={GBD} RBD={RBD} GBKG={GBKG} RBKG={RBKG} initialTemplate={editTemplate} initialSections={editSections}/>}
 
       {view==='admin:newform'&&<FormBuilder onBack={()=>setView('admin:list')} supabase={supabase} loadFormsDB={loadFormsDB} s={s} TX={TX} T2={T2} T3={T3} BD={BD} SF={SF} S2={S2} BRAND={BRAND} G={G} R={R} AM={AM} GBD={GBD} RBD={RBD} GBKG={GBKG} RBKG={RBKG}/>}
 
@@ -2918,10 +2930,20 @@ function ApproverView({ev,onApprove,onPrint,onBack}){
   </div>;
 }
 
-function FormBuilder({onBack,supabase,loadFormsDB,s,TX,T2,T3,BD,SF,S2,BRAND,G,R,AM,GBD,RBD,GBKG,RBKG}){
+function FormBuilder({onBack,supabase,loadFormsDB,s,TX,T2,T3,BD,SF,S2,BRAND,G,R,AM,GBD,RBD,GBKG,RBKG,initialTemplate=null,initialSections=[]}){
+  const editMode=!!initialTemplate;
   const[step,setStep]=useState(0);
-  const[tmpl,setTmpl]=useState({type_id:'',code:'',label:'',mode:'licencia',color:'#005596',icon:'',extra_fields:[],prereq:'',site:'chilca'});
-  const[sections,setSections]=useState([{id:1,role:'operador',label:'',subtitle:'',items:['']}]);
+  const[tmpl,setTmpl]=useState(initialTemplate||{type_id:'',code:'',label:'',mode:'licencia',color:'#005596',icon:'',extra_fields:[],prereq:'',site:'chilca'});
+  const[sections,setSections]=useState(()=>{
+    if(initialSections.length>0){
+      return initialSections.map(sec=>({
+        id:sec.id,role:sec.role,label:sec.label,subtitle:sec.subtitle||'',
+        items:(sec.form_items||[]).sort((a,b)=>a.order_index-b.order_index).map(i=>i.text),
+        _dbId:sec.id
+      }));
+    }
+    return [{id:1,role:'operador',label:'',subtitle:'',items:['']}];
+  });
   const[saving,setSaving]=useState(false);
   const[msg,setMsg]=useState('');
   const FIELDS=['equipo','turno','colada','logbook','supervisor','area','telefono'];
@@ -2937,29 +2959,48 @@ function FormBuilder({onBack,supabase,loadFormsDB,s,TX,T2,T3,BD,SF,S2,BRAND,G,R,
     if(!tmpl.type_id||!tmpl.label||!tmpl.code){setMsg('Completa ID, Código y Nombre.');return;}
     setSaving(true);setMsg('');
     try{
-      const{data:tr,error:te}=await supabase.from('form_templates').insert({...tmpl,is_active:true}).select().single();
-      if(te) throw te;
+      let tmplId;
+      if(editMode){
+        // UPDATE existing template
+        const{error:ue}=await supabase.from('form_templates').update({
+          code:tmpl.code,label:tmpl.label,mode:tmpl.mode,color:tmpl.color,
+          icon:tmpl.icon,extra_fields:tmpl.extra_fields,prereq:tmpl.prereq
+        }).eq('id',tmpl.id);
+        if(ue) throw ue;
+        tmplId=tmpl.id;
+        // Delete existing sections (items cascade via FK)
+        await supabase.from('form_sections').delete().eq('template_id',tmplId);
+      } else {
+        // INSERT new template
+        const{data:tr,error:te}=await supabase.from('form_templates').insert({...tmpl,is_active:true}).select().single();
+        if(te) throw te;
+        tmplId=tr.id;
+      }
+      // Insert sections + items (same for create and edit)
       for(let si=0;si<sections.length;si++){
         const sec=sections[si];if(!sec.label.trim()) continue;
-        const{data:sr,error:se}=await supabase.from('form_sections').insert({template_id:tr.id,role:sec.role,section_key:'sec'+(si+1),order_index:si,label:sec.label,subtitle:sec.subtitle||''}).select().single();
+        const{data:sr,error:se}=await supabase.from('form_sections').insert({template_id:tmplId,role:sec.role,section_key:'sec'+(si+1),order_index:si,label:sec.label,subtitle:sec.subtitle||''}).select().single();
         if(se) throw se;
         const valid=sec.items.filter(it=>it.trim());
         for(let ii=0;ii<valid.length;ii++) await supabase.from('form_items').insert({section_id:sr.id,order_index:ii,text:valid[ii],item_type:'observable'});
       }
-      await loadFormsDB();setMsg('✓ Formulario creado. Ya disponible en la app.');setTimeout(onBack,2000);
+      await loadFormsDB();
+      setMsg(editMode?'✓ Formulario actualizado correctamente.':'✓ Formulario creado. Ya disponible en la app.');
+      setTimeout(onBack,2000);
     }catch(e){setMsg('Error: '+e.message);}
     setSaving(false);
   };
   const steps=['1. Datos','2. Campos','3. Secciones','4. Revisar'];
   return <div>
     <button style={s.back} onClick={onBack}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>Historial</button>
-    <h2 style={s.h1}>Crear Formulario</h2>
+    <h2 style={s.h1}>{editMode?'Editar Formulario':'Crear Formulario'}</h2>
+    {editMode&&<div style={{fontSize:12,color:T2,marginBottom:12,padding:'6px 12px',background:'#FFF9E6',borderRadius:6,border:'1px solid #F0C040'}}>⚠ Los cambios solo aplican a evaluaciones nuevas. Las evaluaciones existentes en el historial no se modifican.</div>}
     <div style={{display:'flex',gap:4,marginBottom:20}}>
       {steps.map((st,i)=><div key={i} onClick={()=>setStep(i)} style={{flex:1,padding:'8px 4px',borderRadius:8,fontSize:11,fontWeight:600,textAlign:'center',cursor:'pointer',background:step===i?BRAND:step>i?GBKG:SF,color:step===i?'#fff':step>i?G:T2,border:`1px solid ${step===i?BRAND:step>i?GBD:BD}`}}>{st}</div>)}
     </div>
     {step===0&&<div style={{...s.card,display:'flex',flexDirection:'column',gap:14}}>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-        <div><label style={s.label}>ID único *</label><input style={s.input} value={tmpl.type_id} placeholder="ej: bc4, proceso_nuevo" onChange={e=>setTmpl(t=>({...t,type_id:e.target.value.toLowerCase().replace(/\s/g,'_')}))}/><p style={{fontSize:10,color:T3,marginTop:3}}>Sin espacios ni caracteres especiales</p></div>
+        <div><label style={s.label}>ID único {editMode?'(no editable)':'*'}</label><input style={{...s.input,background:editMode?'#F4F4F4':undefined,color:editMode?T3:undefined}} value={tmpl.type_id} disabled={editMode} placeholder="ej: bc4, proceso_nuevo" onChange={e=>setTmpl(t=>({...t,type_id:e.target.value.toLowerCase().replace(/\s/g,'_')}))}/><p style={{fontSize:10,color:T3,marginTop:3}}>{editMode?'El ID no puede cambiarse en un formulario existente':'Sin espacios ni caracteres especiales'}</p></div>
         <div><label style={s.label}>Código BKN Doc *</label><input style={s.input} value={tmpl.code} placeholder="ej: TRG-F-020" onChange={e=>setTmpl(t=>({...t,code:e.target.value}))}/></div>
       </div>
       <div><label style={s.label}>Nombre del formulario *</label><input style={s.input} value={tmpl.label} placeholder="ej: Grúa Puente BC4" onChange={e=>setTmpl(t=>({...t,label:e.target.value}))}/></div>
@@ -3018,7 +3059,7 @@ function FormBuilder({onBack,supabase,loadFormsDB,s,TX,T2,T3,BD,SF,S2,BRAND,G,R,
         </div>)}
       </div>)}
       {msg&&<div style={{padding:'10px 14px',borderRadius:8,fontSize:12,fontWeight:500,background:msg.startsWith('✓')?GBKG:RBKG,color:msg.startsWith('✓')?G:R,border:`1px solid ${msg.startsWith('✓')?GBD:RBD}`}}>{msg}</div>}
-      <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}><button style={s.btn} onClick={()=>setStep(2)}>← Editar</button><button style={s.btnPrimary} disabled={saving} onClick={save}>{saving?'Guardando...':'💾 Guardar formulario'}</button></div>
+      <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}><button style={s.btn} onClick={()=>setStep(2)}>← Editar</button><button style={s.btnPrimary} disabled={saving} onClick={save}>{saving?'Guardando...':(editMode?'💾 Guardar cambios':'💾 Crear formulario')}</button></div>
     </div>}
   </div>;
 }
