@@ -223,47 +223,32 @@ function genCode(){
 function today(){
   return new Date().toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
 }
-function initEval(type, role, formTemplatesDB=[], formSectionsDB=[]){
+function initEval(type,role,formTemplatesDB=[],formSectionsDB=[]){
   const t=TYPES.find(x=>x.id===type);
   const mode=t?.mode||'permiso';
   const effectiveRole=mode==='licencia'?'operador':role;
   let domains;
-
-  // ── Try Supabase-loaded data first ──────────────────────────────────────
-  const tmpl=formTemplatesDB.find(t=>t.type_id===type);
+  // Try Supabase data first
+  const tmpl=formTemplatesDB.find(ft=>ft.type_id===type);
   if(tmpl&&formSectionsDB.length>0){
-    const secs=formSectionsDB
-      .filter(s=>s.template_id===tmpl.id&&s.role===effectiveRole)
-      .sort((a,b)=>a.order_index-b.order_index);
+    const secs=formSectionsDB.filter(s=>s.template_id===tmpl.id&&s.role===effectiveRole).sort((a,b)=>a.order_index-b.order_index);
     if(secs.length>0){
       domains=secs.map(sec=>({
-        k:sec.section_key, label:sec.label, sub:sec.subtitle||'',
-        items:(sec.form_items||[])
-          .sort((a,b)=>a.order_index-b.order_index)
-          .map(i=>({text:i.text,result:null})),
-        domainResult:null, obs:''
+        k:sec.section_key,label:sec.label,sub:sec.subtitle||'',
+        items:(sec.form_items||[]).sort((a,b)=>a.order_index-b.order_index).map(i=>({text:i.text,result:null})),
+        domainResult:null,obs:''
       }));
     }
   }
-
-  // ── Fallback: hardcoded data ─────────────────────────────────────────────
+  // Fallback: hardcoded data
   if(!domains||!domains.length){
     if(mode==='licencia'){
       const secs=COMP_LIC[type]?.operador||[];
-      domains=secs.map(sec=>({
-        k:sec.k, label:sec.label, sub:sec.sub||'',
-        items:sec.items.map(text=>({text,result:null})),
-        domainResult:null, obs:''
-      }));
+      domains=secs.map(sec=>({k:sec.k,label:sec.label,sub:sec.sub||'',items:sec.items.map(text=>({text,result:null})),domainResult:null,obs:''}));
     } else {
-      domains=DOM.map((d,i)=>({
-        ...d,
-        items:(COMP[type]?.[effectiveRole]?.[i]||[]).map(text=>({text,result:null})),
-        domainResult:null, obs:''
-      }));
+      domains=DOM.map((d,i)=>({...d,items:(COMP[type]?.[effectiveRole]?.[i]||[]).map(text=>({text,result:null})),domainResult:null,obs:''}));
     }
   }
-
   return{
     id:genCode(), type, role:effectiveRole, mode:mode, status:'draft',
     docCode:t.code, color:t.color,
@@ -1503,7 +1488,6 @@ export default function App(){
   const [keepaliveMsg,setKeepaliveMsg]=useState('');
   const [formTemplates,setFormTemplates]=useState([]);
   const [formSections,setFormSections]=useState([]);
-  const [formsLoaded,setFormsLoaded]=useState(false);
   const [pinInput,setPinInput]=useState('');
   const [pinError,setPinError]=useState('');
   const [pinVisible,setPinVisible]=useState(false);
@@ -1517,15 +1501,13 @@ export default function App(){
   const [evalPinVisible,setEvalPinVisible]=useState(false);
   const [evalPinAttempts,setEvalPinAttempts]=useState(0);
 
-  // Load form templates from Supabase on startup
-  useEffect(()=>{ loadFormsDB(); },[]);
-
   // Refresh pending re-evals every time the evaluator reaches the category screen
   useEffect(()=>{
     if(view==='eval:type'){
       loadPendingReevals().then(setPendingReevals);
     }
   },[view]);
+  useEffect(()=>{ loadFormsDB(); },[]);
   useEffect(()=>{
     loadDocMeta().then(meta=>setDocMeta(meta));
   },[]);
@@ -1594,14 +1576,12 @@ export default function App(){
     try{
       const{data:tmpl}=await supabase.from('form_templates').select('*').eq('site','chilca').eq('is_active',true);
       if(!tmpl||!tmpl.length) return false;
-      const tmplIds=tmpl.map(t=>t.id);
-      const{data:secs}=await supabase.from('form_sections').select('*, form_items(*)').in('template_id',tmplIds);
+      const{data:secs}=await supabase.from('form_sections').select('*, form_items(*)').in('template_id',tmpl.map(t=>t.id));
       if(!secs) return false;
       setFormTemplates(tmpl);
       setFormSections(secs);
-      setFormsLoaded(true);
       return true;
-    }catch(e){ console.warn('Forms DB load failed:',e); return false; }
+    }catch(e){ console.warn('Forms DB:',e); return false; }
   }
 
   async function loadDocMeta(){
@@ -2412,6 +2392,213 @@ export default function App(){
         </div>)}
       </div>}
 
+
+      {/* ══ ADMIN: NEW FORM (Form Builder) ══ */}
+      {view==='admin:newform'&&(()=>{
+        const[step,setFBStep]=React.useState(0);
+        const[tmpl,setTmpl]=React.useState({type_id:'',code:'',label:'',mode:'licencia',color:'#005596',icon:'',extra_fields:[],prereq:'',site:'chilca'});
+        const[roles,setRoles]=React.useState(['operador']);
+        const[sections,setSections]=React.useState([{id:Date.now(),role:'operador',label:'',subtitle:'',items:['']}]);
+        const[saving,setSaving]=React.useState(false);
+        const[fbMsg,setFbMsg]=React.useState('');
+
+        const FIELD_OPTIONS=['equipo','turno','colada','logbook','supervisor','area','telefono'];
+        const ROLE_OPTIONS=['operador','emisor','ejecutor'];
+
+        const updateSection=(idx,key,val)=>{const s=[...sections];s[idx]={...s[idx],[key]:val};setSections(s);};
+        const addItem=(sIdx)=>{const s=[...sections];s[sIdx].items=[...s[sIdx].items,''];setSections(s);};
+        const updateItem=(sIdx,iIdx,val)=>{const s=[...sections];const its=[...s[sIdx].items];its[iIdx]=val;s[sIdx]={...s[sIdx],items:its};setSections(s);};
+        const removeItem=(sIdx,iIdx)=>{const s=[...sections];s[sIdx].items=s[sIdx].items.filter((_,i)=>i!==iIdx);setSections(s);};
+        const addSection=(role)=>setSections([...sections,{id:Date.now(),role,label:'',subtitle:'',items:['']}]);
+        const removeSection=(idx)=>setSections(sections.filter((_,i)=>i!==idx));
+
+        const saveFB=async()=>{
+          if(!tmpl.type_id||!tmpl.label||!tmpl.code){setFbMsg('Completa al menos: ID, Código y Nombre del formulario.');return;}
+          setSaving(true); setFbMsg('');
+          try{
+            // Insert template
+            const{data:tmplRes,error:tmplErr}=await supabase.from('form_templates').insert({...tmpl,is_active:true}).select().single();
+            if(tmplErr) throw tmplErr;
+            const tmplId=tmplRes.id;
+            // Insert sections + items
+            for(let si=0;si<sections.length;si++){
+              const sec=sections[si];
+              if(!sec.label.trim()) continue;
+              const{data:secRes,error:secErr}=await supabase.from('form_sections').insert({
+                template_id:tmplId,role:sec.role,section_key:'sec'+(si+1),
+                order_index:si,label:sec.label,subtitle:sec.subtitle||''
+              }).select().single();
+              if(secErr) throw secErr;
+              const validItems=sec.items.filter(it=>it.trim());
+              for(let ii=0;ii<validItems.length;ii++){
+                await supabase.from('form_items').insert({section_id:secRes.id,order_index:ii,text:validItems[ii],item_type:'observable'});
+              }
+            }
+            // Refresh forms
+            await loadFormsDB();
+            setFbMsg('✓ Formulario creado correctamente. Ya aparece en la app.');
+            setTimeout(()=>{setView('admin:forms');},2000);
+          }catch(e){ setFbMsg('Error: '+e.message); }
+          setSaving(false);
+        };
+
+        const stepTitles=['1. Datos del formulario','2. Campos del participante','3. Secciones e ítems','4. Revisar y guardar'];
+
+        return <div>
+          <button style={s.back} onClick={()=>setView('admin:list')}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+            Historial
+          </button>
+          <h2 style={s.h1}>Crear Formulario</h2>
+
+          {/* Step indicator */}
+          <div style={{display:'flex',gap:4,marginBottom:20}}>
+            {stepTitles.map((st,i)=><div key={i} onClick={()=>setFBStep(i)}
+              style={{flex:1,padding:'8px',borderRadius:8,fontSize:11,fontWeight:600,textAlign:'center',cursor:'pointer',
+                background:step===i?BRAND:step>i?GBKG:SF,
+                color:step===i?'#fff':step>i?G:T2,
+                border:`1px solid ${step===i?BRAND:step>i?GBD:BD}`}}>
+              {st}
+            </div>)}
+          </div>
+
+          {/* STEP 0: Template metadata */}
+          {step===0&&<div style={{...s.card,display:'flex',flexDirection:'column',gap:14}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <div>
+                <label style={s.label}>ID único del formulario *</label>
+                <input style={s.input} value={tmpl.type_id} placeholder="ej: bc4, alturas2, proceso_x"
+                  onChange={e=>setTmpl({...tmpl,type_id:e.target.value.toLowerCase().replace(/\s/g,'_')})}/>
+                <p style={{fontSize:10,color:T3,marginTop:3}}>Sin espacios, solo letras y guiones bajos</p>
+              </div>
+              <div>
+                <label style={s.label}>Código BKN Doc *</label>
+                <input style={s.input} value={tmpl.code} placeholder="ej: TRG-F-020, C09785-BC4"
+                  onChange={e=>setTmpl({...tmpl,code:e.target.value})}/>
+              </div>
+            </div>
+            <div>
+              <label style={s.label}>Nombre del formulario *</label>
+              <input style={s.input} value={tmpl.label} placeholder="ej: Grúa Puente BC4, Trabajo en Espacios Fríos"
+                onChange={e=>setTmpl({...tmpl,label:e.target.value})}/>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
+              <div>
+                <label style={s.label}>Tipo</label>
+                <select style={s.input} value={tmpl.mode} onChange={e=>{
+                  setTmpl({...tmpl,mode:e.target.value});
+                  setRoles(e.target.value==='licencia'?['operador']:['emisor','ejecutor']);
+                  setSections(e.target.value==='licencia'
+                    ?[{id:Date.now(),role:'operador',label:'',subtitle:'',items:['']}]
+                    :[{id:Date.now(),role:'emisor',label:'',subtitle:'',items:['']},{id:Date.now()+1,role:'ejecutor',label:'',subtitle:'',items:['']}]);
+                }}>
+                  <option value="licencia">Licencia</option>
+                  <option value="permiso">Permiso de Trabajo</option>
+                </select>
+              </div>
+              <div>
+                <label style={s.label}>Ícono / Abreviatura</label>
+                <input style={s.input} value={tmpl.icon} placeholder="ej: BC4, ↑, ⬡"
+                  onChange={e=>setTmpl({...tmpl,icon:e.target.value})}/>
+              </div>
+              <div>
+                <label style={s.label}>Color</label>
+                <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                  <input type="color" value={tmpl.color} onChange={e=>setTmpl({...tmpl,color:e.target.value})}
+                    style={{width:40,height:36,border:'none',borderRadius:6,cursor:'pointer'}}/>
+                  <input style={{...s.input,flex:1}} value={tmpl.color} onChange={e=>setTmpl({...tmpl,color:e.target.value})}/>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label style={s.label}>Prerequisito (dejar vacío si no aplica)</label>
+              <input style={s.input} value={tmpl.prereq} placeholder="ej: ¿Posee Licencia BC1 vigente? (Obligatorio)"
+                onChange={e=>setTmpl({...tmpl,prereq:e.target.value})}/>
+            </div>
+            <button style={{...s.btnPrimary,alignSelf:'flex-end'}} onClick={()=>setFBStep(1)}>Siguiente →</button>
+          </div>}
+
+          {/* STEP 1: Extra fields */}
+          {step===1&&<div style={{...s.card,display:'flex',flexDirection:'column',gap:14}}>
+            <h3 style={s.h2}>Campos adicionales del participante</h3>
+            <p style={{fontSize:13,color:T2}}>Marca los campos que aparecerán en el formulario además de nombre, apellidos, cargo y fecha.</p>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+              {FIELD_OPTIONS.map(f=><label key={f} style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',padding:'8px 12px',borderRadius:8,border:`1px solid ${tmpl.extra_fields.includes(f)?BRAND:BD}`,background:tmpl.extra_fields.includes(f)?'#EEF3FA':SF}}>
+                <input type="checkbox" checked={tmpl.extra_fields.includes(f)}
+                  onChange={e=>setTmpl({...tmpl,extra_fields:e.target.checked?[...tmpl.extra_fields,f]:tmpl.extra_fields.filter(x=>x!==f)})}/>
+                <span style={{fontSize:12,fontWeight:500,color:tmpl.extra_fields.includes(f)?BRAND:TX}}>{f}</span>
+              </label>)}
+            </div>
+            <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+              <button style={s.btn} onClick={()=>setFBStep(0)}>← Anterior</button>
+              <button style={s.btnPrimary} onClick={()=>setFBStep(2)}>Siguiente →</button>
+            </div>
+          </div>}
+
+          {/* STEP 2: Sections & items */}
+          {step===2&&<div style={{display:'flex',flexDirection:'column',gap:12}}>
+            {roles.map(role=><div key={role} style={{...s.card}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+                <h3 style={{...s.h2,margin:0,textTransform:'capitalize'}}>
+                  {role==='operador'?'Secciones del formulario':`Rol: ${role.charAt(0).toUpperCase()+role.slice(1)}`}
+                </h3>
+                <button style={{...s.btnSm,color:BRAND,borderColor:BRAND}} onClick={()=>addSection(role)}>+ Agregar sección</button>
+              </div>
+              {sections.filter(s2=>s2.role===role).map((sec,sIdx)=>{
+                const realIdx=sections.findIndex(s2=>s2.id===sec.id);
+                return <div key={sec.id} style={{border:`1px solid ${BD}`,borderRadius:10,padding:'12px',marginBottom:10,background:'#FAFAFA'}}>
+                  <div style={{display:'flex',gap:8,marginBottom:8}}>
+                    <input style={{...s.input,flex:2}} value={sec.label} placeholder="Nombre de la sección (ej: 1. EPP y Protección Personal)"
+                      onChange={e=>updateSection(realIdx,'label',e.target.value)}/>
+                    <input style={{...s.input,flex:1}} value={sec.subtitle} placeholder="Subtítulo (opcional)"
+                      onChange={e=>updateSection(realIdx,'subtitle',e.target.value)}/>
+                    <button onClick={()=>removeSection(realIdx)} style={{cursor:'pointer',background:'#FEF2F2',color:R,border:`1px solid ${RBD}`,borderRadius:6,padding:'0 10px',flexShrink:0}}>✕</button>
+                  </div>
+                  {sec.items.map((item,iIdx)=><div key={iIdx} style={{display:'flex',gap:6,marginBottom:6,alignItems:'center'}}>
+                    <span style={{color:T3,fontSize:11,minWidth:24,textAlign:'right'}}>{iIdx+1}.</span>
+                    <input style={{...s.input,flex:1}} value={item} placeholder="Criterio de competencia observable..."
+                      onChange={e=>updateItem(realIdx,iIdx,e.target.value)}/>
+                    <button onClick={()=>removeItem(realIdx,iIdx)} style={{cursor:'pointer',background:'none',border:'none',color:T3,fontSize:16,padding:'0 4px'}}>×</button>
+                  </div>)}
+                  <button style={{...s.btnSm,marginTop:4,color:G,borderColor:GBD}} onClick={()=>addItem(realIdx)}>+ Ítem</button>
+                </div>;
+              })}
+            </div>)}
+            <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+              <button style={s.btn} onClick={()=>setFBStep(1)}>← Anterior</button>
+              <button style={s.btnPrimary} onClick={()=>setFBStep(3)}>Revisar →</button>
+            </div>
+          </div>}
+
+          {/* STEP 3: Review & save */}
+          {step===3&&<div style={{...s.card,display:'flex',flexDirection:'column',gap:12}}>
+            <h3 style={s.h2}>Resumen antes de guardar</h3>
+            <div style={{background:S2,borderRadius:8,padding:'12px 16px'}}>
+              <div style={{fontSize:13,fontWeight:600}}>{tmpl.label}</div>
+              <div style={{fontSize:11,color:T2,marginTop:2}}>{tmpl.code} · {tmpl.mode} · ID: {tmpl.type_id}</div>
+              <div style={{fontSize:11,color:T2,marginTop:2}}>Campos: {tmpl.extra_fields.join(', ')||'ninguno adicional'}</div>
+              {tmpl.prereq&&<div style={{fontSize:11,color:AM,marginTop:2}}>Prerequisito: {tmpl.prereq}</div>}
+            </div>
+            {roles.map(role=><div key={role}>
+              <div style={{fontSize:11,fontWeight:700,color:T3,textTransform:'uppercase',marginBottom:4}}>{role}</div>
+              {sections.filter(s2=>s2.role===role).map((sec,i)=><div key={i} style={{marginLeft:8,marginBottom:6}}>
+                <div style={{fontSize:12,fontWeight:600,color:TX}}>{sec.label||'(sin nombre)'}</div>
+                {sec.items.filter(it=>it.trim()).map((it,j)=><div key={j} style={{fontSize:11,color:T2,marginLeft:8}}>• {it}</div>)}
+              </div>)}
+            </div>)}
+            {fbMsg&&<div style={{padding:'10px 14px',borderRadius:8,fontSize:12,fontWeight:500,
+              background:fbMsg.startsWith('✓')?GBKG:RBKG,color:fbMsg.startsWith('✓')?G:R,
+              border:`1px solid ${fbMsg.startsWith('✓')?GBD:RBD}`}}>{fbMsg}</div>}
+            <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+              <button style={s.btn} onClick={()=>setFBStep(2)}>← Editar</button>
+              <button style={{...s.btnPrimary}} disabled={saving} onClick={saveFB}>
+                {saving?'Guardando...':'💾 Guardar formulario'}
+              </button>
+            </div>
+          </div>}
+        </div>;
+      })()}
+
       {view==='admin:docmeta'&&(()=>{
         const cats=[
           {label:'Permisos de Trabajo de Alto Riesgo', types:TYPES.filter(t=>t.mode==='permiso')},
@@ -2600,6 +2787,10 @@ export default function App(){
             <button onClick={()=>setView('admin:forms')}
               style={{...s.btnSm,display:'flex',alignItems:'center',gap:4}}>
               📄 Formularios
+            </button>
+            <button onClick={()=>{setView('admin:newform');}}
+              style={{...s.btnSm,display:'flex',alignItems:'center',gap:4,background:'#005596',color:'#fff',border:'none'}}>
+              ＋ Crear Formulario
             </button>
             <button onClick={()=>{setDocMetaType(null);setDocMetaMsg('');setView('admin:docmeta');}}
               style={{...s.btnSm,display:'flex',alignItems:'center',gap:4}}>
