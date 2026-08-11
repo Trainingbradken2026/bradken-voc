@@ -228,19 +228,15 @@ function initEval(type,role,formTemplatesDB=[],formSectionsDB=[]){
   const mode=t?.mode||'permiso';
   const effectiveRole=mode==='licencia'?'operador':role;
   let domains;
-  // Try Supabase data first
   const tmpl=formTemplatesDB.find(ft=>ft.type_id===type);
   if(tmpl&&formSectionsDB.length>0){
     const secs=formSectionsDB.filter(s=>s.template_id===tmpl.id&&s.role===effectiveRole).sort((a,b)=>a.order_index-b.order_index);
     if(secs.length>0){
-      domains=secs.map(sec=>({
-        k:sec.section_key,label:sec.label,sub:sec.subtitle||'',
+      domains=secs.map(sec=>({k:sec.section_key,label:sec.label,sub:sec.subtitle||'',
         items:(sec.form_items||[]).sort((a,b)=>a.order_index-b.order_index).map(i=>({text:i.text,result:null})),
-        domainResult:null,obs:''
-      }));
+        domainResult:null,obs:''}));
     }
   }
-  // Fallback: hardcoded data
   if(!domains||!domains.length){
     if(mode==='licencia'){
       const secs=COMP_LIC[type]?.operador||[];
@@ -249,17 +245,9 @@ function initEval(type,role,formTemplatesDB=[],formSectionsDB=[]){
       domains=DOM.map((d,i)=>({...d,items:(COMP[type]?.[effectiveRole]?.[i]||[]).map(text=>({text,result:null})),domainResult:null,obs:''}));
     }
   }
-  return{
-    id:genCode(), type, role:effectiveRole, mode:mode, status:'draft',
-    docCode:t.code, color:t.color,
-    participant:{nombres:'',apellidos:'',cargo:'',fechaCurso:'',
-      prereqCheck:null,logbook:null,colada:'',turno:'',equipo:'',area:'',
-      operacionObservada:'',supNombre:'',supFecha:'',telefono:'',
-    },
-    evaluator:{nombre:'',fecha:today()},
-    domains, overallResult:null, comments:'',
-    approval:null, aiRec:'', createdAt:new Date().toISOString()
-  };
+  return{id:genCode(),type,role:effectiveRole,mode,status:'draft',docCode:t.code,color:t.color,
+    participant:{nombres:'',apellidos:'',cargo:'',fechaCurso:'',prereqCheck:null,logbook:null,colada:'',turno:'',equipo:'',area:'',operacionObservada:'',supNombre:'',supFecha:'',telefono:''},
+    evaluator:{nombre:'',fecha:today()},domains,overallResult:null,comments:'',approval:null,aiRec:'',createdAt:new Date().toISOString()};
 }
 function flatEval(d){return{id:d.id,type:d.type,role:d.role,mode:d.mode||'permiso',status:d.status||'draft',doc_code:d.docCode||'',color:d.color||'#005596',participant:d.participant||{},evaluator:d.evaluator||{},domains:d.domains||[],overall_result:d.overallResult||null,comments:d.comments||'',approval:d.approval||null,ai_rec:d.aiRec||'',evaluator_signed_at:d.evaluatorSignedAt||null,site:'chilca'};}
 function normalizeEval(row){return{id:row.id,type:row.type,role:row.role,mode:row.mode||'permiso',status:row.status||'draft',docCode:row.doc_code||'',color:row.color||'#005596',participant:row.participant||{nombres:'',apellidos:'',cargo:'',fechaCurso:'',prereqCheck:null,logbook:null,colada:'',turno:'',equipo:'',operacionObservada:'',supNombre:'',supFecha:'',telefono:'',area:''},evaluator:row.evaluator||{nombre:'',fecha:''},domains:row.domains||[],overallResult:row.overall_result||null,comments:row.comments||'',approval:row.approval||null,aiRec:row.ai_rec||'',evaluatorSignedAt:row.evaluator_signed_at||null,createdAt:row.created_at||new Date().toISOString(),plan:row.plan||null};}
@@ -925,6 +913,94 @@ function ResultBadge({r}){
   </span>;
 }
 
+
+// ════════════════════════════════════════════════════════════════════════
+// BRADKEN CORPORATE PDF CHROME — encabezado/pie nativos en jsPDF
+// ════════════════════════════════════════════════════════════════════════
+const PDF_PAGE_W=210,PDF_PAGE_H=297,PDF_MARGIN=10;
+const PDF_CONTENT_W=PDF_PAGE_W-PDF_MARGIN*2;
+const PDF_COVER_HEADER_H=32,PDF_COVER_FOOTER_H=46,PDF_DOC_HEADER_H=35,PDF_DOC_FOOTER_H=22;
+const PDF_BORDER=[200,212,232],PDF_LBL=[0,85,150],PDF_TXT=[20,20,20],PDF_GREY=[85,85,85];
+const PDF_CONFIDENTIAL_TXT="This document, including any attachments, is confidential and may contain commercially sensitive information. Please notify Bradken if you have received this document in error. Any unauthorised use of this document or anything contained in it is expressly prohibited.";
+const PDF_UNCONTROLLED_TXT="Uncontrolled Copy if it has been printed or downloaded outside a validated copy control register";
+const PDF_PRINTED_COPY_TXT="Si este documento se ha impreso o descargado, se convierte inmediatamente en una copia no controlada y no puede utilizarse ni consultarse en ningún requisito operativo a menos que se utilice un registro de control de copias validado o un sistema equivalente.";
+function loadExternalScript(src,globalCheck){
+  if(globalCheck()) return Promise.resolve();
+  window.__bkScriptLoads=window.__bkScriptLoads||{};
+  if(window.__bkScriptLoads[src]) return window.__bkScriptLoads[src];
+  const p=new Promise((res,rej)=>{const el=document.createElement('script');el.src=src;el.onload=res;el.onerror=rej;document.head.appendChild(el);});
+  window.__bkScriptLoads[src]=p;return p;
+}
+function buildPdfDocMeta({ev,dm,typeInfo,isLicencia,roleLabel,subtitle}){
+  return{org:'Bradken',proceso:'Capability & Training',region:'Chilca',tipo:'Form (blank)',
+    titulo:`${typeInfo?.label||''}${isLicencia?` — ${roleLabel} ${subtitle}`:` — Verificación de Competencia — ${roleLabel}`}`,
+    bknDoc:dm.bknDoc||ev.docCode||'',fecha:dm.fecha||'',revisadoPor:dm.revisadoPor||'',aprobadoPor:dm.aprobadoPor||''};
+}
+function CoverHeader(pdf,bannerImgDataUrl){
+  const y0=PDF_MARGIN,imgH=19;
+  if(bannerImgDataUrl) pdf.addImage(bannerImgDataUrl,'PNG',PDF_MARGIN,y0,PDF_CONTENT_W,imgH);
+  pdf.setFont('helvetica','normal');pdf.setFontSize(7);pdf.setTextColor(...PDF_GREY);
+  pdf.text(pdf.splitTextToSize(PDF_PRINTED_COPY_TXT,PDF_CONTENT_W),PDF_MARGIN,y0+imgH+4);
+  return y0+PDF_COVER_HEADER_H;
+}
+function DocumentHeader(pdf,meta){
+  const y0=PDF_MARGIN,colW=PDF_CONTENT_W/4;
+  pdf.setFillColor(0,40,74);pdf.rect(PDF_MARGIN,y0,PDF_CONTENT_W,3.2,'F');let y=y0+3.2;
+  pdf.setDrawColor(...PDF_BORDER);pdf.setLineWidth(0.15);
+  [['Organización:',meta.org],['Proceso:',meta.proceso],['Region:',meta.region],['Tipo de documento:',meta.tipo]].forEach((c,i)=>{
+    const x=PDF_MARGIN+i*colW;pdf.rect(x,y,colW,9.5);
+    pdf.setFont('helvetica','bold');pdf.setFontSize(7);pdf.setTextColor(...PDF_LBL);pdf.text(c[0],x+2,y+3.6);
+    pdf.setFont('helvetica','normal');pdf.setFontSize(8);pdf.setTextColor(...PDF_TXT);pdf.text(String(c[1]||''),x+2,y+7.4);
+  });y+=9.5;
+  pdf.rect(PDF_MARGIN,y,PDF_CONTENT_W,8);
+  pdf.setFont('helvetica','bold');pdf.setFontSize(7);pdf.setTextColor(...PDF_LBL);pdf.text('Título del Documento:',PDF_MARGIN+2,y+3.6);
+  pdf.setFont('helvetica','bold');pdf.setFontSize(8);pdf.setTextColor(...PDF_TXT);
+  pdf.text(pdf.splitTextToSize(meta.titulo||'',PDF_CONTENT_W-4)[0]||'',PDF_MARGIN+2,y+7);y+=8;
+  [['BKN Doc & Revisión:',meta.bknDoc],['Fecha:',meta.fecha],['Revisado por:',meta.revisadoPor],['Aprobado por:',meta.aprobadoPor]].forEach((c,i)=>{
+    const x=PDF_MARGIN+i*colW;pdf.rect(x,y,colW,8);
+    pdf.setFont('helvetica','bold');pdf.setFontSize(7);pdf.setTextColor(...PDF_LBL);pdf.text(c[0],x+2,y+3.4);
+    pdf.setFont('helvetica','normal');pdf.setFontSize(7.5);pdf.setTextColor(...PDF_TXT);pdf.text(String(c[1]||''),x+2,y+6.6);
+  });y+=8;
+  pdf.setFont('helvetica','normal');pdf.setFontSize(6.8);pdf.setTextColor(...PDF_GREY);
+  pdf.text(PDF_UNCONTROLLED_TXT,PDF_MARGIN,y+3);
+  return y0+PDF_DOC_HEADER_H;
+}
+function DocumentFooter(pdf,meta,pageNum,totalPages,logoDataUrl){
+  const y=PDF_PAGE_H-PDF_MARGIN-PDF_DOC_FOOTER_H;
+  pdf.setDrawColor(225,225,225);pdf.setLineWidth(0.1);pdf.line(PDF_MARGIN,y,PDF_MARGIN+PDF_CONTENT_W,y);
+  let ty=y+4;
+  pdf.setFont('helvetica','bold');pdf.setFontSize(7.5);pdf.setTextColor(30,30,30);
+  pdf.text('© Bradken Pty Limited 2026',PDF_MARGIN,ty);
+  const w1=pdf.getTextWidth('© Bradken Pty Limited 2026');
+  pdf.setFont('helvetica','normal');pdf.text(`  l  ABN 33 108 693 009  l  Page: ${pageNum} of ${totalPages}  l `,PDF_MARGIN+w1,ty);
+  ty+=4;pdf.setFont('helvetica','bold');pdf.setFontSize(7);pdf.text('Confidential Internal Use Only:',PDF_MARGIN,ty);
+  ty+=3.2;pdf.setFont('helvetica','normal');pdf.setFontSize(6.8);pdf.setTextColor(60,60,60);
+  pdf.text(pdf.splitTextToSize(PDF_CONFIDENTIAL_TXT,PDF_CONTENT_W-42),PDF_MARGIN,ty);
+  if(logoDataUrl){const lw=26,lh=26*102/426;pdf.addImage(logoDataUrl,'PNG',PDF_MARGIN+PDF_CONTENT_W-lw,y+2,lw,lh);}
+}
+function CoverFooter(pdf,meta,pageNum,totalPages){
+  const y=PDF_PAGE_H-PDF_MARGIN-PDF_COVER_FOOTER_H;
+  pdf.setDrawColor(0,85,150);pdf.setLineWidth(0.4);pdf.line(PDF_MARGIN,y,PDF_MARGIN+PDF_CONTENT_W,y);
+  let ty=y+4;
+  pdf.setFont('helvetica','bold');pdf.setFontSize(7.5);pdf.setTextColor(30,30,30);
+  pdf.text('© Bradken Pty Limited 2026',PDF_MARGIN,ty);
+  const w1=pdf.getTextWidth('© Bradken Pty Limited 2026');
+  pdf.setFont('helvetica','normal');pdf.text(`  l  ABN 33 108 693 009  l  Page: ${pageNum} of ${totalPages}  l  ${meta.bknDoc||''}`,PDF_MARGIN+w1,ty);
+  ty+=4.2;pdf.setFont('helvetica','bold');pdf.setFontSize(7);pdf.text('Confidential Internal Use Only:',PDF_MARGIN,ty);
+  ty+=3.2;pdf.setFont('helvetica','normal');pdf.setFontSize(6.8);pdf.setTextColor(60,60,60);
+  const lines=pdf.splitTextToSize(PDF_CONFIDENTIAL_TXT,PDF_CONTENT_W);pdf.text(lines,PDF_MARGIN,ty);ty+=lines.length*3.1+2;
+  const colW=PDF_CONTENT_W/4,rowH=8;
+  [[['Organización:',meta.org],['Proceso:',meta.proceso],['Region:',meta.region],['Tipo de documento:',meta.tipo]],
+   [['BKN Doc & Revision:',meta.bknDoc],['Fecha:',meta.fecha],['Revisado por:',meta.revisadoPor],['Aprobado por:',meta.aprobadoPor]]]
+  .forEach((row,ri)=>row.forEach((cel,ci)=>{
+    const x=PDF_MARGIN+ci*colW,yy=ty+ri*rowH;
+    pdf.setDrawColor(...PDF_BORDER);pdf.setLineWidth(0.15);pdf.rect(x,yy,colW,rowH);
+    pdf.setFont('helvetica','bold');pdf.setFontSize(7);pdf.setTextColor(...PDF_LBL);pdf.text(cel[0],x+2,yy+3.4);
+    pdf.setFont('helvetica','normal');pdf.setFontSize(7.5);pdf.setTextColor(...PDF_TXT);pdf.text(String(cel[1]||''),x+2,yy+6.6);
+  }));
+}
+// ════════════════════════════════════════════════════════════════════════
+
 function PrintView({ev,onClose,docMeta={}}){
   const dm={...DOC_META_DEFAULTS[ev?.type||''],...docMeta};
   const [pdfLoading,setPdfLoading]=useState(false);
@@ -940,57 +1016,47 @@ function PrintView({ev,onClose,docMeta={}}){
   const today2=()=>new Date().toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
 
   async function handlePDF(){
-    const el=document.getElementById('bradken-print-doc');
-    if(!el){setPdfError('Contenido no encontrado.');return;}
-    setPdfLoading(true); setPdfError('');
+    const bannerEl=document.getElementById('pdf-cover-banner');
+    const bodyEl=document.getElementById('pdf-body-content');
+    if(!bodyEl){setPdfError('Contenido no encontrado.');return;}
+    setPdfLoading(true);setPdfError('');
     try{
-      await new Promise((res,rej)=>{
-        if(window.html2canvas){res();return;}
-        const s=document.createElement('script');
-        s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-        s.onload=res; s.onerror=rej; document.head.appendChild(s);
-      });
-      await new Promise((res,rej)=>{
-        if(window.jspdf){res();return;}
-        const s=document.createElement('script');
-        s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-        s.onload=res; s.onerror=rej; document.head.appendChild(s);
-      });
-      const canvas=await window.html2canvas(el,{
-        scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false,
-        windowWidth:el.scrollWidth,windowHeight:el.scrollHeight
-      });
+      await loadExternalScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',()=>!!window.html2canvas);
+      await loadExternalScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',()=>!!window.jspdf);
+      const capture=(node)=>window.html2canvas(node,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false,windowWidth:node.scrollWidth});
+      const[bannerCanvas,bodyCanvas]=await Promise.all([bannerEl?capture(bannerEl):Promise.resolve(null),capture(bodyEl)]);
+      const bannerImgDataUrl=bannerCanvas?bannerCanvas.toDataURL('image/png'):null;
+      const logoEl=document.querySelector('#bradken-print-doc img[alt="Bradken"]');
+      const logoDataUrl=logoEl?logoEl.src:null;
       const{jsPDF}=window.jspdf;
       const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-      const pw=pdf.internal.pageSize.getWidth();
-      const ph=pdf.internal.pageSize.getHeight();
-      const margin=10;
-      const cw=pw-margin*2;
-      const ratio=cw/canvas.width;
-      const fullH=canvas.height*ratio;
-      const totalPages=Math.ceil(fullH/ph);
-      for(let p=0;p<totalPages;p++){
-        if(p>0) pdf.addPage();
-        const srcY=Math.floor((p*ph)/ratio);
-        const srcH=Math.min(Math.floor(ph/ratio),canvas.height-srcY);
-        if(srcH<=0) break;
-        const pc=document.createElement('canvas');
-        pc.width=canvas.width; pc.height=srcH;
-        pc.getContext('2d').drawImage(canvas,0,srcY,canvas.width,srcH,0,0,canvas.width,srcH);
-        pdf.addImage(pc.toDataURL('image/jpeg',0.92),'JPEG',margin,0,cw,srcH*ratio);
-      }
+      const pxPerMM=bodyCanvas.width/PDF_CONTENT_W;
+      const bodyTotalMM=bodyCanvas.height/pxPerMM;
+      const firstContentH=PDF_PAGE_H-PDF_MARGIN*2-PDF_COVER_HEADER_H-PDF_COVER_FOOTER_H;
+      const innerContentH=PDF_PAGE_H-PDF_MARGIN*2-PDF_DOC_HEADER_H-PDF_DOC_FOOTER_H;
+      const pageHeightsMM=[Math.min(firstContentH,bodyTotalMM)];
+      let remaining=bodyTotalMM-pageHeightsMM[0];
+      while(remaining>0.5){const h=Math.min(innerContentH,remaining);pageHeightsMM.push(h);remaining-=h;}
+      const totalPages=pageHeightsMM.length;
+      const meta=buildPdfDocMeta({ev,dm,typeInfo,isLicencia,roleLabel,subtitle});
+      let srcYpx=0;
+      pageHeightsMM.forEach((hMM,idx)=>{
+        if(idx>0) pdf.addPage();
+        const isFirst=idx===0;
+        const contentTopY=isFirst?CoverHeader(pdf,bannerImgDataUrl):DocumentHeader(pdf,meta);
+        const srcHpx=Math.round(hMM*pxPerMM);
+        const slice=document.createElement('canvas');
+        slice.width=bodyCanvas.width;slice.height=Math.min(srcHpx,bodyCanvas.height-srcYpx);
+        if(slice.height<=0) return;
+        slice.getContext('2d').drawImage(bodyCanvas,0,srcYpx,bodyCanvas.width,slice.height,0,0,bodyCanvas.width,slice.height);
+        pdf.addImage(slice.toDataURL('image/jpeg',0.92),'JPEG',PDF_MARGIN,contentTopY,PDF_CONTENT_W,slice.height/pxPerMM);
+        srcYpx+=srcHpx;
+        if(isFirst) CoverFooter(pdf,meta,idx+1,totalPages);
+        else DocumentFooter(pdf,meta,idx+1,totalPages,logoDataUrl);
+      });
       const nom=`VOC_${(ev.type||'').toUpperCase()}_${(ev.participant.nombres||'').replace(/\s+/g,'_')}_${ev.id}.pdf`;
-      try{
-        pdf.save(nom);
-      }catch(e2){
-        const uri=pdf.output('datauristring');
-        const w=window.open('','_blank');
-        if(w){ w.location.href=uri; }
-        else{ const a=document.createElement('a'); a.href=uri; a.target='_blank'; a.click(); }
-      }
-    }catch(e){
-      setPdfError('Error al generar PDF: '+e.message);
-    }
+      try{pdf.save(nom);}catch(e2){const uri=pdf.output('datauristring');const w=window.open('','_blank');if(w){w.location.href=uri;}else{const a=document.createElement('a');a.href=uri;a.target='_blank';a.click();}}
+    }catch(e){setPdfError('Error al generar PDF: '+e.message);}
     setPdfLoading(false);
   }
 
@@ -1047,7 +1113,7 @@ function PrintView({ev,onClose,docMeta={}}){
     <div id="bradken-print-doc" style={{background:'#fff',padding:'4px'}}>
 
     {/* ══ PAGE 1 HEADER: Diagonal blue banner + logo (SVG-based for html2canvas compatibility) ══ */}
-    <div style={{position:'relative',width:'100%',height:76,marginBottom:8}}>
+    <div id="pdf-cover-banner" style={{position:'relative',width:'100%',height:76,marginBottom:8}}>
       <svg width="100%" height="76" viewBox="0 0 800 76" preserveAspectRatio="none"
            style={{position:'absolute',top:0,left:0}}>
         <defs>
@@ -1073,6 +1139,7 @@ function PrintView({ev,onClose,docMeta={}}){
       Si este documento se ha impreso o descargado, se convierte inmediatamente en una copia no controlada y no puede utilizarse ni consultarse en ningún requisito operativo a menos que se utilice un registro de control de copias validado o un sistema equivalente.
     </p>
 
+    <div id="pdf-body-content">
     {/* ── DOCUMENT TITLE SECTION ── */}
     <div style={{marginBottom:14}}>
       <div style={{fontFamily:'Arial,sans-serif',fontSize:22,fontWeight:700,color:'#005596',marginBottom:2,lineHeight:1.2}}>
@@ -1269,51 +1336,10 @@ function PrintView({ev,onClose,docMeta={}}){
         <C>{dm.rev||'1'}</C><C>{dm.fechaEmision||'30-Jun-26'}</C><C>{dm.clausula||'Emisión inicial – formato Bradken Chilca.'}</C><C>{dm.revisadoPor||'avera'}</C><C>{dm.aprobadoPor||'hramamurthi'}</C>
       </tr>
     </tbody></table>
+    </div>{/* end pdf-body-content */}
 
-    {/* ══ BOTTOM META TABLE (Organización / Título / BKN Doc) ══ */}
-    <table style={{width:'100%',borderCollapse:'collapse',marginTop:8,marginBottom:4,border:'1px solid #C8D8EC'}}><tbody>
-      <tr>
-        {['Organización','Proceso','Región','Tipo de documento'].map((lbl,i)=>(
-          <td key={i} style={{border:'1px solid #C8D8EC',padding:'6px 10px',width:'25%',verticalAlign:'top'}}>
-            <div style={{fontSize:9,color:'#888',marginBottom:2}}>{lbl}:</div>
-            <div style={{fontSize:11,fontWeight:700,color:'#111'}}>
-              {['Bradken','Capability & Training','Chilca','Form (blank)'][i]}
-            </div>
-          </td>
-        ))}
-      </tr>
-      <tr>
-        <td colSpan={4} style={{border:'1px solid #C8D8EC',padding:'6px 10px'}}>
-          <span style={{fontSize:10,color:'#888'}}>Título del Documento: </span>
-          <span style={{fontSize:11,fontWeight:700,color:'#111'}}>
-            {typeInfo?.label}{isLicencia?` — ${roleLabel} ${subtitle}`:` — Verificación de Competencia — ${roleLabel}`}
-          </span>
-        </td>
-      </tr>
-      <tr>
-        {[
-          ['BKN Doc & Revisión',dm.bknDoc||ev.docCode],
-          ['Fecha',dm.fecha||'30-Jun-26'],
-          ['Revisado por',dm.revisadoPor||'avera'],
-          ['Aprobado por',dm.aprobadoPor||'hramamurthi'],
-        ].map(([lbl,val],i)=>(
-          <td key={i} style={{border:'1px solid #C8D8EC',padding:'6px 10px',verticalAlign:'top'}}>
-            <span style={{fontSize:10,color:'#888'}}>{lbl}: </span>
-            <span style={{fontSize:11,fontWeight:700,color:'#111'}}>{val}</span>
-          </td>
-        ))}
-      </tr>
-    </tbody></table>
-
-    {/* ── FOOTER ── */}
-    <div style={{borderTop:`2px solid ${BK}`,paddingTop:6,marginTop:4}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-        <div style={{fontSize:9,color:'#555',lineHeight:1.5}}>
-          <b>© Bradken Pty Limited 2026</b> l ABN 33 108 693 009 l Código de evaluación: <b>{ev.id}</b><br/>
-          <b>Solo para uso interno confidencial:</b> Este documento es confidencial y puede contener información comercial sensible. Queda expresamente prohibido cualquier uso no autorizado.
-        </div>
-        <BradkenLogo/>
-      </div>
+    <div style={{marginTop:10,padding:'8px 12px',background:'#F0F4FA',border:'1px dashed #C8D4E8',borderRadius:6,fontSize:11,color:'#556'}}>
+      ℹ El encabezado, pie de página e información documental se agregan automáticamente al generar el PDF en todas las páginas.
     </div>
 
     </div>{/* end bradken-print-doc */}
@@ -1578,9 +1604,7 @@ export default function App(){
       if(!tmpl||!tmpl.length) return false;
       const{data:secs}=await supabase.from('form_sections').select('*, form_items(*)').in('template_id',tmpl.map(t=>t.id));
       if(!secs) return false;
-      setFormTemplates(tmpl);
-      setFormSections(secs);
-      return true;
+      setFormTemplates(tmpl); setFormSections(secs); return true;
     }catch(e){ console.warn('Forms DB:',e); return false; }
   }
 
@@ -2392,9 +2416,7 @@ export default function App(){
         </div>)}
       </div>}
 
-
-      {/* ══ ADMIN: NEW FORM (Form Builder) ══ */}
-      {view==='admin:newform'&&<FormBuilder onBack={()=>setView('admin:list')} supabase={supabase} loadFormsDB={loadFormsDB} s={s} TX={TX} T2={T2} T3={T3} BD={BD} SF={SF} S2={S2} BRAND={BRAND} BK={BK} G={G} R={R} AM={AM} GBD={GBD} RBD={RBD} GBKG={GBKG} RBKG={RBKG} ABKG={ABKG}/>}
+      {view==='admin:newform'&&<FormBuilder onBack={()=>setView('admin:list')} supabase={supabase} loadFormsDB={loadFormsDB} s={s} TX={TX} T2={T2} T3={T3} BD={BD} SF={SF} S2={S2} BRAND={BRAND} G={G} R={R} AM={AM} GBD={GBD} RBD={RBD} GBKG={GBKG} RBKG={RBKG}/>}
 
             {view==='admin:docmeta'&&(()=>{
         const cats=[
@@ -2585,7 +2607,7 @@ export default function App(){
               style={{...s.btnSm,display:'flex',alignItems:'center',gap:4}}>
               📄 Formularios
             </button>
-            <button onClick={()=>{setView('admin:newform');}}
+            <button onClick={()=>setView('admin:newform')}
               style={{...s.btnSm,display:'flex',alignItems:'center',gap:4,background:'#005596',color:'#fff',border:'none'}}>
               ＋ Crear Formulario
             </button>
@@ -2896,213 +2918,107 @@ function ApproverView({ev,onApprove,onPrint,onBack}){
   </div>;
 }
 
-// ═══════════════════════════════════════════════════════════════
-// FormBuilder — Standalone component (hooks work correctly here)
-// ═══════════════════════════════════════════════════════════════
-function FormBuilder({onBack,supabase,loadFormsDB,s,TX,T2,T3,BD,SF,S2,BRAND,BK,G,R,AM,GBD,RBD,GBKG,RBKG,ABKG}){
+function FormBuilder({onBack,supabase,loadFormsDB,s,TX,T2,T3,BD,SF,S2,BRAND,G,R,AM,GBD,RBD,GBKG,RBKG}){
   const[step,setStep]=useState(0);
   const[tmpl,setTmpl]=useState({type_id:'',code:'',label:'',mode:'licencia',color:'#005596',icon:'',extra_fields:[],prereq:'',site:'chilca'});
   const[sections,setSections]=useState([{id:1,role:'operador',label:'',subtitle:'',items:['']}]);
   const[saving,setSaving]=useState(false);
   const[msg,setMsg]=useState('');
-
-  const FIELD_OPTIONS=['equipo','turno','colada','logbook','supervisor','area','telefono'];
+  const FIELDS=['equipo','turno','colada','logbook','supervisor','area','telefono'];
   const roles=tmpl.mode==='licencia'?['operador']:['emisor','ejecutor'];
-
-  const updSec=(idx,key,val)=>{const a=[...sections];a[idx]={...a[idx],[key]:val};setSections(a);};
-  const updItem=(sIdx,iIdx,val)=>{const a=[...sections];const its=[...a[sIdx].items];its[iIdx]=val;a[sIdx]={...a[sIdx],items:its};setSections(a);};
-  const addItem=(sIdx)=>{const a=[...sections];a[sIdx]={...a[sIdx],items:[...a[sIdx].items,'']};setSections(a);};
-  const remItem=(sIdx,iIdx)=>{const a=[...sections];a[sIdx]={...a[sIdx],items:a[sIdx].items.filter((_,i)=>i!==iIdx)};setSections(a);};
+  const updSec=(idx,k,v)=>{const a=[...sections];a[idx]={...a[idx],[k]:v};setSections(a);};
+  const updItem=(si,ii,v)=>{const a=[...sections];const its=[...a[si].items];its[ii]=v;a[si]={...a[si],items:its};setSections(a);};
+  const addItem=(si)=>{const a=[...sections];a[si]={...a[si],items:[...a[si].items,'']};setSections(a);};
+  const remItem=(si,ii)=>{const a=[...sections];a[si]={...a[si],items:a[si].items.filter((_,i)=>i!==ii)};setSections(a);};
   const addSec=(role)=>setSections([...sections,{id:Date.now(),role,label:'',subtitle:'',items:['']}]);
   const remSec=(idx)=>setSections(sections.filter((_,i)=>i!==idx));
-
-  // Sync sections when mode changes
-  const changeMode=(mode)=>{
-    setTmpl(t=>({...t,mode}));
-    setSections(mode==='licencia'
-      ?[{id:1,role:'operador',label:'',subtitle:'',items:['']}]
-      :[{id:1,role:'emisor',label:'',subtitle:'',items:['']},{id:2,role:'ejecutor',label:'',subtitle:'',items:['']}]);
-  };
-
+  const changeMode=(mode)=>{setTmpl(t=>({...t,mode}));setSections(mode==='licencia'?[{id:1,role:'operador',label:'',subtitle:'',items:['']}]:[{id:1,role:'emisor',label:'',subtitle:'',items:['']},{id:2,role:'ejecutor',label:'',subtitle:'',items:['']}]);};
   const save=async()=>{
-    if(!tmpl.type_id||!tmpl.label||!tmpl.code){setMsg('Completa ID, Código y Nombre del formulario.');return;}
+    if(!tmpl.type_id||!tmpl.label||!tmpl.code){setMsg('Completa ID, Código y Nombre.');return;}
     setSaving(true);setMsg('');
     try{
       const{data:tr,error:te}=await supabase.from('form_templates').insert({...tmpl,is_active:true}).select().single();
       if(te) throw te;
       for(let si=0;si<sections.length;si++){
-        const sec=sections[si];
-        if(!sec.label.trim()) continue;
-        const{data:sr,error:se}=await supabase.from('form_sections').insert({
-          template_id:tr.id,role:sec.role,section_key:'sec'+(si+1),
-          order_index:si,label:sec.label,subtitle:sec.subtitle||''
-        }).select().single();
+        const sec=sections[si];if(!sec.label.trim()) continue;
+        const{data:sr,error:se}=await supabase.from('form_sections').insert({template_id:tr.id,role:sec.role,section_key:'sec'+(si+1),order_index:si,label:sec.label,subtitle:sec.subtitle||''}).select().single();
         if(se) throw se;
         const valid=sec.items.filter(it=>it.trim());
-        for(let ii=0;ii<valid.length;ii++){
-          await supabase.from('form_items').insert({section_id:sr.id,order_index:ii,text:valid[ii],item_type:'observable'});
-        }
+        for(let ii=0;ii<valid.length;ii++) await supabase.from('form_items').insert({section_id:sr.id,order_index:ii,text:valid[ii],item_type:'observable'});
       }
-      await loadFormsDB();
-      setMsg('✓ Formulario creado. Ya está disponible en la app.');
-      setTimeout(onBack,2000);
+      await loadFormsDB();setMsg('✓ Formulario creado. Ya disponible en la app.');setTimeout(onBack,2000);
     }catch(e){setMsg('Error: '+e.message);}
     setSaving(false);
   };
-
   const steps=['1. Datos','2. Campos','3. Secciones','4. Revisar'];
-
   return <div>
-    <button style={s.back} onClick={onBack}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
-      Historial
-    </button>
+    <button style={s.back} onClick={onBack}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>Historial</button>
     <h2 style={s.h1}>Crear Formulario</h2>
-
-    {/* Steps */}
     <div style={{display:'flex',gap:4,marginBottom:20}}>
-      {steps.map((st,i)=><div key={i} onClick={()=>setStep(i)}
-        style={{flex:1,padding:'8px 4px',borderRadius:8,fontSize:11,fontWeight:600,textAlign:'center',cursor:'pointer',
-          background:step===i?BRAND:step>i?GBKG:SF,
-          color:step===i?'#fff':step>i?G:T2,
-          border:`1px solid ${step===i?BRAND:step>i?GBD:BD}`}}>{st}</div>)}
+      {steps.map((st,i)=><div key={i} onClick={()=>setStep(i)} style={{flex:1,padding:'8px 4px',borderRadius:8,fontSize:11,fontWeight:600,textAlign:'center',cursor:'pointer',background:step===i?BRAND:step>i?GBKG:SF,color:step===i?'#fff':step>i?G:T2,border:`1px solid ${step===i?BRAND:step>i?GBD:BD}`}}>{st}</div>)}
     </div>
-
-    {/* Step 0: Metadata */}
     {step===0&&<div style={{...s.card,display:'flex',flexDirection:'column',gap:14}}>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-        <div>
-          <label style={s.label}>ID único *</label>
-          <input style={s.input} value={tmpl.type_id} placeholder="ej: bc4, proceso_nuevo"
-            onChange={e=>setTmpl(t=>({...t,type_id:e.target.value.toLowerCase().replace(/\s/g,'_')}))}/>
-          <p style={{fontSize:10,color:T3,marginTop:3}}>Sin espacios ni caracteres especiales</p>
-        </div>
-        <div>
-          <label style={s.label}>Código BKN Doc *</label>
-          <input style={s.input} value={tmpl.code} placeholder="ej: TRG-F-020"
-            onChange={e=>setTmpl(t=>({...t,code:e.target.value}))}/>
-        </div>
+        <div><label style={s.label}>ID único *</label><input style={s.input} value={tmpl.type_id} placeholder="ej: bc4, proceso_nuevo" onChange={e=>setTmpl(t=>({...t,type_id:e.target.value.toLowerCase().replace(/\s/g,'_')}))}/><p style={{fontSize:10,color:T3,marginTop:3}}>Sin espacios ni caracteres especiales</p></div>
+        <div><label style={s.label}>Código BKN Doc *</label><input style={s.input} value={tmpl.code} placeholder="ej: TRG-F-020" onChange={e=>setTmpl(t=>({...t,code:e.target.value}))}/></div>
       </div>
-      <div>
-        <label style={s.label}>Nombre del formulario *</label>
-        <input style={s.input} value={tmpl.label} placeholder="ej: Grúa Puente BC4"
-          onChange={e=>setTmpl(t=>({...t,label:e.target.value}))}/>
-      </div>
+      <div><label style={s.label}>Nombre del formulario *</label><input style={s.input} value={tmpl.label} placeholder="ej: Grúa Puente BC4" onChange={e=>setTmpl(t=>({...t,label:e.target.value}))}/></div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
-        <div>
-          <label style={s.label}>Tipo</label>
-          <select style={s.input} value={tmpl.mode} onChange={e=>changeMode(e.target.value)}>
-            <option value="licencia">Licencia</option>
-            <option value="permiso">Permiso de Trabajo</option>
-          </select>
-        </div>
-        <div>
-          <label style={s.label}>Ícono</label>
-          <input style={s.input} value={tmpl.icon} placeholder="ej: BC4, ↑"
-            onChange={e=>setTmpl(t=>({...t,icon:e.target.value}))}/>
-        </div>
-        <div>
-          <label style={s.label}>Color</label>
-          <div style={{display:'flex',gap:6,alignItems:'center'}}>
-            <input type="color" value={tmpl.color} onChange={e=>setTmpl(t=>({...t,color:e.target.value}))}
-              style={{width:40,height:36,border:'none',borderRadius:6,cursor:'pointer'}}/>
-            <input style={{...s.input,flex:1}} value={tmpl.color} onChange={e=>setTmpl(t=>({...t,color:e.target.value}))}/>
-          </div>
-        </div>
+        <div><label style={s.label}>Tipo</label><select style={s.input} value={tmpl.mode} onChange={e=>changeMode(e.target.value)}><option value="licencia">Licencia</option><option value="permiso">Permiso de Trabajo</option></select></div>
+        <div><label style={s.label}>Ícono</label><input style={s.input} value={tmpl.icon} placeholder="ej: BC4, ↑" onChange={e=>setTmpl(t=>({...t,icon:e.target.value}))}/></div>
+        <div><label style={s.label}>Color</label><div style={{display:'flex',gap:6,alignItems:'center'}}><input type="color" value={tmpl.color} onChange={e=>setTmpl(t=>({...t,color:e.target.value}))} style={{width:40,height:36,border:'none',borderRadius:6,cursor:'pointer'}}/><input style={{...s.input,flex:1}} value={tmpl.color} onChange={e=>setTmpl(t=>({...t,color:e.target.value}))}/></div></div>
       </div>
-      <div>
-        <label style={s.label}>Prerequisito (opcional)</label>
-        <input style={s.input} value={tmpl.prereq} placeholder="ej: ¿Posee Licencia BC1 vigente? (Obligatorio)"
-          onChange={e=>setTmpl(t=>({...t,prereq:e.target.value}))}/>
-      </div>
-      <div style={{textAlign:'right'}}>
-        <button style={s.btnPrimary} onClick={()=>setStep(1)}>Siguiente →</button>
-      </div>
+      <div><label style={s.label}>Prerequisito (opcional)</label><input style={s.input} value={tmpl.prereq} placeholder="ej: ¿Posee Licencia BC1 vigente? (Obligatorio)" onChange={e=>setTmpl(t=>({...t,prereq:e.target.value}))}/></div>
+      <div style={{textAlign:'right'}}><button style={s.btnPrimary} onClick={()=>setStep(1)}>Siguiente →</button></div>
     </div>}
-
-    {/* Step 1: Extra fields */}
     {step===1&&<div style={{...s.card,display:'flex',flexDirection:'column',gap:14}}>
       <h3 style={s.h2}>Campos adicionales del participante</h3>
-      <p style={{fontSize:13,color:T2}}>Marca los campos que aplican además de nombre, apellidos, cargo y fecha.</p>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-        {FIELD_OPTIONS.map(f=><label key={f} style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',
-          padding:'8px 12px',borderRadius:8,
-          border:`1px solid ${tmpl.extra_fields.includes(f)?BRAND:BD}`,
-          background:tmpl.extra_fields.includes(f)?'#EEF3FA':SF}}>
-          <input type="checkbox" checked={tmpl.extra_fields.includes(f)}
-            onChange={e=>setTmpl(t=>({...t,extra_fields:e.target.checked?[...t.extra_fields,f]:t.extra_fields.filter(x=>x!==f)}))}/>
+        {FIELDS.map(f=><label key={f} style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',padding:'8px 12px',borderRadius:8,border:`1px solid ${tmpl.extra_fields.includes(f)?BRAND:BD}`,background:tmpl.extra_fields.includes(f)?'#EEF3FA':SF}}>
+          <input type="checkbox" checked={tmpl.extra_fields.includes(f)} onChange={e=>setTmpl(t=>({...t,extra_fields:e.target.checked?[...t.extra_fields,f]:t.extra_fields.filter(x=>x!==f)}))}/>
           <span style={{fontSize:12,fontWeight:500,color:tmpl.extra_fields.includes(f)?BRAND:TX}}>{f}</span>
         </label>)}
       </div>
-      <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
-        <button style={s.btn} onClick={()=>setStep(0)}>← Anterior</button>
-        <button style={s.btnPrimary} onClick={()=>setStep(2)}>Siguiente →</button>
-      </div>
+      <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}><button style={s.btn} onClick={()=>setStep(0)}>← Anterior</button><button style={s.btnPrimary} onClick={()=>setStep(2)}>Siguiente →</button></div>
     </div>}
-
-    {/* Step 2: Sections & items */}
     {step===2&&<div style={{display:'flex',flexDirection:'column',gap:12}}>
       {roles.map(role=><div key={role} style={s.card}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
-          <h3 style={{...s.h2,margin:0}}>
-            {role==='operador'?'Secciones del formulario':`Rol: ${role.charAt(0).toUpperCase()+role.slice(1)}`}
-          </h3>
+          <h3 style={{...s.h2,margin:0}}>{role==='operador'?'Secciones':`Rol: ${role.charAt(0).toUpperCase()+role.slice(1)}`}</h3>
           <button style={{...s.btnSm,color:BRAND,borderColor:BRAND}} onClick={()=>addSec(role)}>+ Sección</button>
         </div>
-        {sections.filter(sc=>sc.role===role).map((sec)=>{
-          const realIdx=sections.findIndex(sc=>sc.id===sec.id);
-          return <div key={sec.id} style={{border:`1px solid ${BD}`,borderRadius:10,padding:'12px',marginBottom:10,background:'#FAFAFA'}}>
-            <div style={{display:'flex',gap:8,marginBottom:8}}>
-              <input style={{...s.input,flex:2}} value={sec.label} placeholder="Nombre de la sección"
-                onChange={e=>updSec(realIdx,'label',e.target.value)}/>
-              <input style={{...s.input,flex:1}} value={sec.subtitle} placeholder="Subtítulo (opcional)"
-                onChange={e=>updSec(realIdx,'subtitle',e.target.value)}/>
-              <button onClick={()=>remSec(realIdx)}
-                style={{cursor:'pointer',background:'#FEF2F2',color:R,border:`1px solid ${RBD}`,borderRadius:6,padding:'0 10px',flexShrink:0}}>✕</button>
-            </div>
-            {sec.items.map((item,iIdx)=><div key={iIdx} style={{display:'flex',gap:6,marginBottom:6,alignItems:'center'}}>
-              <span style={{color:T3,fontSize:11,minWidth:20,textAlign:'right'}}>{iIdx+1}.</span>
-              <input style={{...s.input,flex:1}} value={item} placeholder="Criterio de competencia observable..."
-                onChange={e=>updItem(realIdx,iIdx,e.target.value)}/>
-              <button onClick={()=>remItem(realIdx,iIdx)}
-                style={{cursor:'pointer',background:'none',border:'none',color:T3,fontSize:18,lineHeight:1}}>×</button>
-            </div>)}
-            <button style={{...s.btnSm,color:G,borderColor:GBD,marginTop:4}} onClick={()=>addItem(realIdx)}>+ Ítem</button>
-          </div>;
-        })}
+        {sections.filter(sc=>sc.role===role).map(sec=>{const ri=sections.findIndex(sc2=>sc2.id===sec.id);return <div key={sec.id} style={{border:`1px solid ${BD}`,borderRadius:10,padding:'12px',marginBottom:10,background:'#FAFAFA'}}>
+          <div style={{display:'flex',gap:8,marginBottom:8}}>
+            <input style={{...s.input,flex:2}} value={sec.label} placeholder="Nombre de la sección" onChange={e=>updSec(ri,'label',e.target.value)}/>
+            <input style={{...s.input,flex:1}} value={sec.subtitle} placeholder="Subtítulo (opcional)" onChange={e=>updSec(ri,'subtitle',e.target.value)}/>
+            <button onClick={()=>remSec(ri)} style={{cursor:'pointer',background:'#FEF2F2',color:R,border:`1px solid ${RBD}`,borderRadius:6,padding:'0 10px',flexShrink:0}}>✕</button>
+          </div>
+          {sec.items.map((item,ii)=><div key={ii} style={{display:'flex',gap:6,marginBottom:6,alignItems:'center'}}>
+            <span style={{color:T3,fontSize:11,minWidth:20,textAlign:'right'}}>{ii+1}.</span>
+            <input style={{...s.input,flex:1}} value={item} placeholder="Criterio de competencia observable..." onChange={e=>updItem(ri,ii,e.target.value)}/>
+            <button onClick={()=>remItem(ri,ii)} style={{cursor:'pointer',background:'none',border:'none',color:T3,fontSize:18,lineHeight:1}}>×</button>
+          </div>)}
+          <button style={{...s.btnSm,color:G,borderColor:GBD,marginTop:4}} onClick={()=>addItem(ri)}>+ Ítem</button>
+        </div>;})}
       </div>)}
-      <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
-        <button style={s.btn} onClick={()=>setStep(1)}>← Anterior</button>
-        <button style={s.btnPrimary} onClick={()=>setStep(3)}>Revisar →</button>
-      </div>
+      <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}><button style={s.btn} onClick={()=>setStep(1)}>← Anterior</button><button style={s.btnPrimary} onClick={()=>setStep(3)}>Revisar →</button></div>
     </div>}
-
-    {/* Step 3: Review & save */}
     {step===3&&<div style={{...s.card,display:'flex',flexDirection:'column',gap:12}}>
       <h3 style={s.h2}>Resumen antes de guardar</h3>
       <div style={{background:S2,borderRadius:8,padding:'12px 16px'}}>
         <div style={{fontSize:14,fontWeight:600,color:TX}}>{tmpl.label||'(sin nombre)'}</div>
         <div style={{fontSize:11,color:T2,marginTop:2}}>{tmpl.code} · {tmpl.mode} · ID: {tmpl.type_id}</div>
-        <div style={{fontSize:11,color:T2,marginTop:2}}>Campos adicionales: {tmpl.extra_fields.join(', ')||'ninguno'}</div>
+        <div style={{fontSize:11,color:T2,marginTop:2}}>Campos: {tmpl.extra_fields.join(', ')||'ninguno adicional'}</div>
         {tmpl.prereq&&<div style={{fontSize:11,color:AM,marginTop:2}}>Prerequisito: {tmpl.prereq}</div>}
       </div>
-      {roles.map(role=><div key={role}>
-        <div style={{fontSize:11,fontWeight:700,color:T3,textTransform:'uppercase',marginBottom:4,marginTop:8}}>{role}</div>
+      {roles.map(role=><div key={role}><div style={{fontSize:11,fontWeight:700,color:T3,textTransform:'uppercase',marginBottom:4,marginTop:8}}>{role}</div>
         {sections.filter(sc=>sc.role===role).map((sec,i)=><div key={i} style={{marginLeft:8,marginBottom:6}}>
           <div style={{fontSize:12,fontWeight:600,color:TX}}>{sec.label||'(sin nombre)'}</div>
           {sec.items.filter(it=>it.trim()).map((it,j)=><div key={j} style={{fontSize:11,color:T2,marginLeft:8,marginBottom:2}}>• {it}</div>)}
         </div>)}
       </div>)}
-      {msg&&<div style={{padding:'10px 14px',borderRadius:8,fontSize:12,fontWeight:500,
-        background:msg.startsWith('✓')?GBKG:RBKG,
-        color:msg.startsWith('✓')?G:R,
-        border:`1px solid ${msg.startsWith('✓')?GBD:RBD}`}}>{msg}</div>}
-      <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
-        <button style={s.btn} onClick={()=>setStep(2)}>← Editar</button>
-        <button style={s.btnPrimary} disabled={saving} onClick={save}>
-          {saving?'Guardando...':'💾 Guardar formulario'}
-        </button>
-      </div>
+      {msg&&<div style={{padding:'10px 14px',borderRadius:8,fontSize:12,fontWeight:500,background:msg.startsWith('✓')?GBKG:RBKG,color:msg.startsWith('✓')?G:R,border:`1px solid ${msg.startsWith('✓')?GBD:RBD}`}}>{msg}</div>}
+      <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}><button style={s.btn} onClick={()=>setStep(2)}>← Editar</button><button style={s.btnPrimary} disabled={saving} onClick={save}>{saving?'Guardando...':'💾 Guardar formulario'}</button></div>
     </div>}
   </div>;
 }
