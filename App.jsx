@@ -1915,6 +1915,9 @@ export default function App(){
       </div>}
 
       {view==='eval:type'&&(()=>{
+        // New forms from Supabase not in hardcoded TYPES
+        const newPermisos=formTemplates.filter(ft=>ft.mode==='permiso'&&!TYPES.find(t=>t.id===ft.type_id)).map(ft=>({id:ft.type_id,label:ft.label,code:ft.code,color:ft.color||BK,icon:ft.icon||'★',mode:ft.mode,xfields:ft.extra_fields||[],prereq:ft.prereq||null,sub:ft.label}));
+        const newLicencias=formTemplates.filter(ft=>ft.mode==='licencia'&&!TYPES.find(t=>t.id===ft.type_id)).map(ft=>({id:ft.type_id,label:ft.label,code:ft.code,color:ft.color||'#005596',icon:ft.icon||'★',mode:ft.mode,xfields:ft.extra_fields||[],prereq:ft.prereq||null,sub:ft.label}));
         const CATS=[
           { id:'permiso',
             label:'Permisos de Trabajo de Alto Riesgo',
@@ -1931,11 +1934,17 @@ export default function App(){
             icon:<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2c0 6-8 6-8 12a8 8 0 0 0 16 0c0-6-8-6-8-12z"/></svg>,
             color:'#D97706', bg:'#FFFBEB',
             desc:'BM1 · BM2 · BM3 · BM4 · BM5 · BM6 · BM7' },
+          ...(newLicencias.length>0?[{ id:'operaciones',
+            label:'Operaciones',
+            icon:<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>,
+            color:'#059669', bg:'#ECFDF5',
+            desc:newLicencias.map(t=>t.label).join(' · ')}]:[]),
         ];
         const catTypes={
-          permiso: TYPES.filter(t=>t.mode==='permiso'),
+          permiso: [...TYPES.filter(t=>t.mode==='permiso'), ...newPermisos],
           licencia: TYPES.filter(t=>t.mode==='licencia'&&!t.id.startsWith('bm')),
           bm: TYPES.filter(t=>t.id.startsWith('bm')),
+          operaciones: newLicencias,
         };
         const handleTypeClick=(t)=>{
           if(t.mode==='licencia'){setEv(initEval(t.id,'operador',formTemplates,formSections));setView('eval:participant');}
@@ -2359,9 +2368,10 @@ export default function App(){
         <h2 style={s.h1}>Formularios</h2>
         <p style={{color:T2,fontSize:13,margin:'4px 0 20px'}}>Vista previa de todos los formatos en blanco. Haz clic en cualquiera para previsualizarlo.</p>
         {[
-          {label:'Permisos de Trabajo de Alto Riesgo', types:TYPES.filter(t=>t.mode==='permiso')},
+          {label:'Permisos de Trabajo de Alto Riesgo', types:[...TYPES.filter(t=>t.mode==='permiso'),...(formTemplates.filter(ft=>ft.mode==='permiso'&&!TYPES.find(t=>t.id===ft.type_id)).map(ft=>({id:ft.type_id,label:ft.label,code:ft.code,color:ft.color,icon:ft.icon||'★',mode:ft.mode,xfields:ft.extra_fields||[],prereq:ft.prereq||null})))]},
           {label:'Licencias de Equipo y Vehículo', types:TYPES.filter(t=>t.mode==='licencia'&&!t.id.startsWith('bm'))},
           {label:'Licencias para Fundir – Horno de Inducción (BM)', types:TYPES.filter(t=>t.id.startsWith('bm'))},
+          {label:'Operaciones', types:formTemplates.filter(ft=>ft.mode==='licencia'&&!TYPES.find(t=>t.id===ft.type_id)).map(ft=>({id:ft.type_id,label:ft.label,code:ft.code,color:ft.color,icon:ft.icon||'★',mode:ft.mode,xfields:ft.extra_fields||[],prereq:ft.prereq||null}))},
         ].map(cat=><div key={cat.label} style={{marginBottom:20}}>
           <div style={{fontSize:11,fontWeight:700,color:T3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:10}}>{cat.label}</div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
