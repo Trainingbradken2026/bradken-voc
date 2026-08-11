@@ -2368,7 +2368,7 @@ export default function App(){
             {cat.types.flatMap(t=>{
               // For permisos show both roles; for licencias show one (operador)
               const roles=t.mode==='licencia'?['operador']:['emisor','ejecutor'];
-              return roles.map(role=><button key={t.id+'-'+role} onClick={()=>{
+              const roleButtons=roles.map(role=><button key={t.id+'-'+role} onClick={()=>{
                 // Build blank eval for preview
                 let blankDomains;
                 if(t.mode==='licencia'){
@@ -2413,15 +2413,17 @@ export default function App(){
                 <div style={{fontSize:10,color:T3,marginTop:1,fontFamily:"'DM Mono',monospace"}}>{t.code}</div>
               </div>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T3} strokeWidth="2" style={{marginLeft:'auto',flexShrink:0}}><polyline points="9 18 15 12 9 6"/></svg>
-            </button>);})}
-            <button onClick={async()=>{
-                const{data:tmplData}=await supabase.from('form_templates').select('*').eq('type_id',t.id).single();
-                const{data:secsData}=await supabase.from('form_sections').select('*, form_items(*)').eq('template_id',tmplData?.id).order('order_index');
-                setEditTemplate(tmplData);setEditSections(secsData||[]);setView('admin:editform');
-              }}
-              style={{...s.btnSm,display:'flex',alignItems:'center',gap:4,color:'#005596',borderColor:'#005596',marginTop:4}}>
-              ✏ Editar formulario
-            </button>
+            </button>);
+              // Edit button — once per type, with t captured correctly in this scope
+              const typeId=t.id;
+              const editBtn=<button key={t.id+'-edit'}
+                style={{...s.btnSm,display:'flex',alignItems:'center',gap:4,color:'#005596',borderColor:'#005596',gridColumn:'1 / -1'}}
+                onClick={async()=>{
+                  const{data:td}=await supabase.from('form_templates').select('*').eq('type_id',typeId).single();
+                  const{data:sd}=await supabase.from('form_sections').select('*, form_items(*)').eq('template_id',td?.id||'').order('order_index');
+                  setEditTemplate(td);setEditSections(sd||[]);setView('admin:editform');
+                }}>✏ Editar formulario</button>;
+              return [...roleButtons, editBtn];})}
           </div>
         </div>)}
       </div>}
