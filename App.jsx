@@ -2394,212 +2394,9 @@ export default function App(){
 
 
       {/* ══ ADMIN: NEW FORM (Form Builder) ══ */}
-      {view==='admin:newform'&&(()=>{
-        const[step,setFBStep]=React.useState(0);
-        const[tmpl,setTmpl]=React.useState({type_id:'',code:'',label:'',mode:'licencia',color:'#005596',icon:'',extra_fields:[],prereq:'',site:'chilca'});
-        const[roles,setRoles]=React.useState(['operador']);
-        const[sections,setSections]=React.useState([{id:Date.now(),role:'operador',label:'',subtitle:'',items:['']}]);
-        const[saving,setSaving]=React.useState(false);
-        const[fbMsg,setFbMsg]=React.useState('');
+      {view==='admin:newform'&&<FormBuilder onBack={()=>setView('admin:list')} supabase={supabase} loadFormsDB={loadFormsDB} s={s} TX={TX} T2={T2} T3={T3} BD={BD} SF={SF} S2={S2} BRAND={BRAND} BK={BK} G={G} R={R} AM={AM} GBD={GBD} RBD={RBD} GBKG={GBKG} RBKG={RBKG} ABKG={ABKG}/>}
 
-        const FIELD_OPTIONS=['equipo','turno','colada','logbook','supervisor','area','telefono'];
-        const ROLE_OPTIONS=['operador','emisor','ejecutor'];
-
-        const updateSection=(idx,key,val)=>{const s=[...sections];s[idx]={...s[idx],[key]:val};setSections(s);};
-        const addItem=(sIdx)=>{const s=[...sections];s[sIdx].items=[...s[sIdx].items,''];setSections(s);};
-        const updateItem=(sIdx,iIdx,val)=>{const s=[...sections];const its=[...s[sIdx].items];its[iIdx]=val;s[sIdx]={...s[sIdx],items:its};setSections(s);};
-        const removeItem=(sIdx,iIdx)=>{const s=[...sections];s[sIdx].items=s[sIdx].items.filter((_,i)=>i!==iIdx);setSections(s);};
-        const addSection=(role)=>setSections([...sections,{id:Date.now(),role,label:'',subtitle:'',items:['']}]);
-        const removeSection=(idx)=>setSections(sections.filter((_,i)=>i!==idx));
-
-        const saveFB=async()=>{
-          if(!tmpl.type_id||!tmpl.label||!tmpl.code){setFbMsg('Completa al menos: ID, Código y Nombre del formulario.');return;}
-          setSaving(true); setFbMsg('');
-          try{
-            // Insert template
-            const{data:tmplRes,error:tmplErr}=await supabase.from('form_templates').insert({...tmpl,is_active:true}).select().single();
-            if(tmplErr) throw tmplErr;
-            const tmplId=tmplRes.id;
-            // Insert sections + items
-            for(let si=0;si<sections.length;si++){
-              const sec=sections[si];
-              if(!sec.label.trim()) continue;
-              const{data:secRes,error:secErr}=await supabase.from('form_sections').insert({
-                template_id:tmplId,role:sec.role,section_key:'sec'+(si+1),
-                order_index:si,label:sec.label,subtitle:sec.subtitle||''
-              }).select().single();
-              if(secErr) throw secErr;
-              const validItems=sec.items.filter(it=>it.trim());
-              for(let ii=0;ii<validItems.length;ii++){
-                await supabase.from('form_items').insert({section_id:secRes.id,order_index:ii,text:validItems[ii],item_type:'observable'});
-              }
-            }
-            // Refresh forms
-            await loadFormsDB();
-            setFbMsg('✓ Formulario creado correctamente. Ya aparece en la app.');
-            setTimeout(()=>{setView('admin:forms');},2000);
-          }catch(e){ setFbMsg('Error: '+e.message); }
-          setSaving(false);
-        };
-
-        const stepTitles=['1. Datos del formulario','2. Campos del participante','3. Secciones e ítems','4. Revisar y guardar'];
-
-        return <div>
-          <button style={s.back} onClick={()=>setView('admin:list')}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
-            Historial
-          </button>
-          <h2 style={s.h1}>Crear Formulario</h2>
-
-          {/* Step indicator */}
-          <div style={{display:'flex',gap:4,marginBottom:20}}>
-            {stepTitles.map((st,i)=><div key={i} onClick={()=>setFBStep(i)}
-              style={{flex:1,padding:'8px',borderRadius:8,fontSize:11,fontWeight:600,textAlign:'center',cursor:'pointer',
-                background:step===i?BRAND:step>i?GBKG:SF,
-                color:step===i?'#fff':step>i?G:T2,
-                border:`1px solid ${step===i?BRAND:step>i?GBD:BD}`}}>
-              {st}
-            </div>)}
-          </div>
-
-          {/* STEP 0: Template metadata */}
-          {step===0&&<div style={{...s.card,display:'flex',flexDirection:'column',gap:14}}>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              <div>
-                <label style={s.label}>ID único del formulario *</label>
-                <input style={s.input} value={tmpl.type_id} placeholder="ej: bc4, alturas2, proceso_x"
-                  onChange={e=>setTmpl({...tmpl,type_id:e.target.value.toLowerCase().replace(/\s/g,'_')})}/>
-                <p style={{fontSize:10,color:T3,marginTop:3}}>Sin espacios, solo letras y guiones bajos</p>
-              </div>
-              <div>
-                <label style={s.label}>Código BKN Doc *</label>
-                <input style={s.input} value={tmpl.code} placeholder="ej: TRG-F-020, C09785-BC4"
-                  onChange={e=>setTmpl({...tmpl,code:e.target.value})}/>
-              </div>
-            </div>
-            <div>
-              <label style={s.label}>Nombre del formulario *</label>
-              <input style={s.input} value={tmpl.label} placeholder="ej: Grúa Puente BC4, Trabajo en Espacios Fríos"
-                onChange={e=>setTmpl({...tmpl,label:e.target.value})}/>
-            </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
-              <div>
-                <label style={s.label}>Tipo</label>
-                <select style={s.input} value={tmpl.mode} onChange={e=>{
-                  setTmpl({...tmpl,mode:e.target.value});
-                  setRoles(e.target.value==='licencia'?['operador']:['emisor','ejecutor']);
-                  setSections(e.target.value==='licencia'
-                    ?[{id:Date.now(),role:'operador',label:'',subtitle:'',items:['']}]
-                    :[{id:Date.now(),role:'emisor',label:'',subtitle:'',items:['']},{id:Date.now()+1,role:'ejecutor',label:'',subtitle:'',items:['']}]);
-                }}>
-                  <option value="licencia">Licencia</option>
-                  <option value="permiso">Permiso de Trabajo</option>
-                </select>
-              </div>
-              <div>
-                <label style={s.label}>Ícono / Abreviatura</label>
-                <input style={s.input} value={tmpl.icon} placeholder="ej: BC4, ↑, ⬡"
-                  onChange={e=>setTmpl({...tmpl,icon:e.target.value})}/>
-              </div>
-              <div>
-                <label style={s.label}>Color</label>
-                <div style={{display:'flex',gap:6,alignItems:'center'}}>
-                  <input type="color" value={tmpl.color} onChange={e=>setTmpl({...tmpl,color:e.target.value})}
-                    style={{width:40,height:36,border:'none',borderRadius:6,cursor:'pointer'}}/>
-                  <input style={{...s.input,flex:1}} value={tmpl.color} onChange={e=>setTmpl({...tmpl,color:e.target.value})}/>
-                </div>
-              </div>
-            </div>
-            <div>
-              <label style={s.label}>Prerequisito (dejar vacío si no aplica)</label>
-              <input style={s.input} value={tmpl.prereq} placeholder="ej: ¿Posee Licencia BC1 vigente? (Obligatorio)"
-                onChange={e=>setTmpl({...tmpl,prereq:e.target.value})}/>
-            </div>
-            <button style={{...s.btnPrimary,alignSelf:'flex-end'}} onClick={()=>setFBStep(1)}>Siguiente →</button>
-          </div>}
-
-          {/* STEP 1: Extra fields */}
-          {step===1&&<div style={{...s.card,display:'flex',flexDirection:'column',gap:14}}>
-            <h3 style={s.h2}>Campos adicionales del participante</h3>
-            <p style={{fontSize:13,color:T2}}>Marca los campos que aparecerán en el formulario además de nombre, apellidos, cargo y fecha.</p>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-              {FIELD_OPTIONS.map(f=><label key={f} style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',padding:'8px 12px',borderRadius:8,border:`1px solid ${tmpl.extra_fields.includes(f)?BRAND:BD}`,background:tmpl.extra_fields.includes(f)?'#EEF3FA':SF}}>
-                <input type="checkbox" checked={tmpl.extra_fields.includes(f)}
-                  onChange={e=>setTmpl({...tmpl,extra_fields:e.target.checked?[...tmpl.extra_fields,f]:tmpl.extra_fields.filter(x=>x!==f)})}/>
-                <span style={{fontSize:12,fontWeight:500,color:tmpl.extra_fields.includes(f)?BRAND:TX}}>{f}</span>
-              </label>)}
-            </div>
-            <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
-              <button style={s.btn} onClick={()=>setFBStep(0)}>← Anterior</button>
-              <button style={s.btnPrimary} onClick={()=>setFBStep(2)}>Siguiente →</button>
-            </div>
-          </div>}
-
-          {/* STEP 2: Sections & items */}
-          {step===2&&<div style={{display:'flex',flexDirection:'column',gap:12}}>
-            {roles.map(role=><div key={role} style={{...s.card}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
-                <h3 style={{...s.h2,margin:0,textTransform:'capitalize'}}>
-                  {role==='operador'?'Secciones del formulario':`Rol: ${role.charAt(0).toUpperCase()+role.slice(1)}`}
-                </h3>
-                <button style={{...s.btnSm,color:BRAND,borderColor:BRAND}} onClick={()=>addSection(role)}>+ Agregar sección</button>
-              </div>
-              {sections.filter(s2=>s2.role===role).map((sec,sIdx)=>{
-                const realIdx=sections.findIndex(s2=>s2.id===sec.id);
-                return <div key={sec.id} style={{border:`1px solid ${BD}`,borderRadius:10,padding:'12px',marginBottom:10,background:'#FAFAFA'}}>
-                  <div style={{display:'flex',gap:8,marginBottom:8}}>
-                    <input style={{...s.input,flex:2}} value={sec.label} placeholder="Nombre de la sección (ej: 1. EPP y Protección Personal)"
-                      onChange={e=>updateSection(realIdx,'label',e.target.value)}/>
-                    <input style={{...s.input,flex:1}} value={sec.subtitle} placeholder="Subtítulo (opcional)"
-                      onChange={e=>updateSection(realIdx,'subtitle',e.target.value)}/>
-                    <button onClick={()=>removeSection(realIdx)} style={{cursor:'pointer',background:'#FEF2F2',color:R,border:`1px solid ${RBD}`,borderRadius:6,padding:'0 10px',flexShrink:0}}>✕</button>
-                  </div>
-                  {sec.items.map((item,iIdx)=><div key={iIdx} style={{display:'flex',gap:6,marginBottom:6,alignItems:'center'}}>
-                    <span style={{color:T3,fontSize:11,minWidth:24,textAlign:'right'}}>{iIdx+1}.</span>
-                    <input style={{...s.input,flex:1}} value={item} placeholder="Criterio de competencia observable..."
-                      onChange={e=>updateItem(realIdx,iIdx,e.target.value)}/>
-                    <button onClick={()=>removeItem(realIdx,iIdx)} style={{cursor:'pointer',background:'none',border:'none',color:T3,fontSize:16,padding:'0 4px'}}>×</button>
-                  </div>)}
-                  <button style={{...s.btnSm,marginTop:4,color:G,borderColor:GBD}} onClick={()=>addItem(realIdx)}>+ Ítem</button>
-                </div>;
-              })}
-            </div>)}
-            <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
-              <button style={s.btn} onClick={()=>setFBStep(1)}>← Anterior</button>
-              <button style={s.btnPrimary} onClick={()=>setFBStep(3)}>Revisar →</button>
-            </div>
-          </div>}
-
-          {/* STEP 3: Review & save */}
-          {step===3&&<div style={{...s.card,display:'flex',flexDirection:'column',gap:12}}>
-            <h3 style={s.h2}>Resumen antes de guardar</h3>
-            <div style={{background:S2,borderRadius:8,padding:'12px 16px'}}>
-              <div style={{fontSize:13,fontWeight:600}}>{tmpl.label}</div>
-              <div style={{fontSize:11,color:T2,marginTop:2}}>{tmpl.code} · {tmpl.mode} · ID: {tmpl.type_id}</div>
-              <div style={{fontSize:11,color:T2,marginTop:2}}>Campos: {tmpl.extra_fields.join(', ')||'ninguno adicional'}</div>
-              {tmpl.prereq&&<div style={{fontSize:11,color:AM,marginTop:2}}>Prerequisito: {tmpl.prereq}</div>}
-            </div>
-            {roles.map(role=><div key={role}>
-              <div style={{fontSize:11,fontWeight:700,color:T3,textTransform:'uppercase',marginBottom:4}}>{role}</div>
-              {sections.filter(s2=>s2.role===role).map((sec,i)=><div key={i} style={{marginLeft:8,marginBottom:6}}>
-                <div style={{fontSize:12,fontWeight:600,color:TX}}>{sec.label||'(sin nombre)'}</div>
-                {sec.items.filter(it=>it.trim()).map((it,j)=><div key={j} style={{fontSize:11,color:T2,marginLeft:8}}>• {it}</div>)}
-              </div>)}
-            </div>)}
-            {fbMsg&&<div style={{padding:'10px 14px',borderRadius:8,fontSize:12,fontWeight:500,
-              background:fbMsg.startsWith('✓')?GBKG:RBKG,color:fbMsg.startsWith('✓')?G:R,
-              border:`1px solid ${fbMsg.startsWith('✓')?GBD:RBD}`}}>{fbMsg}</div>}
-            <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
-              <button style={s.btn} onClick={()=>setFBStep(2)}>← Editar</button>
-              <button style={{...s.btnPrimary}} disabled={saving} onClick={saveFB}>
-                {saving?'Guardando...':'💾 Guardar formulario'}
-              </button>
-            </div>
-          </div>}
-        </div>;
-      })()}
-
-      {view==='admin:docmeta'&&(()=>{
+            {view==='admin:docmeta'&&(()=>{
         const cats=[
           {label:'Permisos de Trabajo de Alto Riesgo', types:TYPES.filter(t=>t.mode==='permiso')},
           {label:'Licencias de Equipo y Vehículo', types:TYPES.filter(t=>t.mode==='licencia'&&!t.id.startsWith('bm'))},
@@ -3096,5 +2893,216 @@ function ApproverView({ev,onApprove,onPrint,onBack}){
         <button style={s.btn} onClick={onPrint}>🖨 Imprimir</button>
       </div>
     </div>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FormBuilder — Standalone component (hooks work correctly here)
+// ═══════════════════════════════════════════════════════════════
+function FormBuilder({onBack,supabase,loadFormsDB,s,TX,T2,T3,BD,SF,S2,BRAND,BK,G,R,AM,GBD,RBD,GBKG,RBKG,ABKG}){
+  const[step,setStep]=useState(0);
+  const[tmpl,setTmpl]=useState({type_id:'',code:'',label:'',mode:'licencia',color:'#005596',icon:'',extra_fields:[],prereq:'',site:'chilca'});
+  const[sections,setSections]=useState([{id:1,role:'operador',label:'',subtitle:'',items:['']}]);
+  const[saving,setSaving]=useState(false);
+  const[msg,setMsg]=useState('');
+
+  const FIELD_OPTIONS=['equipo','turno','colada','logbook','supervisor','area','telefono'];
+  const roles=tmpl.mode==='licencia'?['operador']:['emisor','ejecutor'];
+
+  const updSec=(idx,key,val)=>{const a=[...sections];a[idx]={...a[idx],[key]:val};setSections(a);};
+  const updItem=(sIdx,iIdx,val)=>{const a=[...sections];const its=[...a[sIdx].items];its[iIdx]=val;a[sIdx]={...a[sIdx],items:its};setSections(a);};
+  const addItem=(sIdx)=>{const a=[...sections];a[sIdx]={...a[sIdx],items:[...a[sIdx].items,'']};setSections(a);};
+  const remItem=(sIdx,iIdx)=>{const a=[...sections];a[sIdx]={...a[sIdx],items:a[sIdx].items.filter((_,i)=>i!==iIdx)};setSections(a);};
+  const addSec=(role)=>setSections([...sections,{id:Date.now(),role,label:'',subtitle:'',items:['']}]);
+  const remSec=(idx)=>setSections(sections.filter((_,i)=>i!==idx));
+
+  // Sync sections when mode changes
+  const changeMode=(mode)=>{
+    setTmpl(t=>({...t,mode}));
+    setSections(mode==='licencia'
+      ?[{id:1,role:'operador',label:'',subtitle:'',items:['']}]
+      :[{id:1,role:'emisor',label:'',subtitle:'',items:['']},{id:2,role:'ejecutor',label:'',subtitle:'',items:['']}]);
+  };
+
+  const save=async()=>{
+    if(!tmpl.type_id||!tmpl.label||!tmpl.code){setMsg('Completa ID, Código y Nombre del formulario.');return;}
+    setSaving(true);setMsg('');
+    try{
+      const{data:tr,error:te}=await supabase.from('form_templates').insert({...tmpl,is_active:true}).select().single();
+      if(te) throw te;
+      for(let si=0;si<sections.length;si++){
+        const sec=sections[si];
+        if(!sec.label.trim()) continue;
+        const{data:sr,error:se}=await supabase.from('form_sections').insert({
+          template_id:tr.id,role:sec.role,section_key:'sec'+(si+1),
+          order_index:si,label:sec.label,subtitle:sec.subtitle||''
+        }).select().single();
+        if(se) throw se;
+        const valid=sec.items.filter(it=>it.trim());
+        for(let ii=0;ii<valid.length;ii++){
+          await supabase.from('form_items').insert({section_id:sr.id,order_index:ii,text:valid[ii],item_type:'observable'});
+        }
+      }
+      await loadFormsDB();
+      setMsg('✓ Formulario creado. Ya está disponible en la app.');
+      setTimeout(onBack,2000);
+    }catch(e){setMsg('Error: '+e.message);}
+    setSaving(false);
+  };
+
+  const steps=['1. Datos','2. Campos','3. Secciones','4. Revisar'];
+
+  return <div>
+    <button style={s.back} onClick={onBack}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+      Historial
+    </button>
+    <h2 style={s.h1}>Crear Formulario</h2>
+
+    {/* Steps */}
+    <div style={{display:'flex',gap:4,marginBottom:20}}>
+      {steps.map((st,i)=><div key={i} onClick={()=>setStep(i)}
+        style={{flex:1,padding:'8px 4px',borderRadius:8,fontSize:11,fontWeight:600,textAlign:'center',cursor:'pointer',
+          background:step===i?BRAND:step>i?GBKG:SF,
+          color:step===i?'#fff':step>i?G:T2,
+          border:`1px solid ${step===i?BRAND:step>i?GBD:BD}`}}>{st}</div>)}
+    </div>
+
+    {/* Step 0: Metadata */}
+    {step===0&&<div style={{...s.card,display:'flex',flexDirection:'column',gap:14}}>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+        <div>
+          <label style={s.label}>ID único *</label>
+          <input style={s.input} value={tmpl.type_id} placeholder="ej: bc4, proceso_nuevo"
+            onChange={e=>setTmpl(t=>({...t,type_id:e.target.value.toLowerCase().replace(/\s/g,'_')}))}/>
+          <p style={{fontSize:10,color:T3,marginTop:3}}>Sin espacios ni caracteres especiales</p>
+        </div>
+        <div>
+          <label style={s.label}>Código BKN Doc *</label>
+          <input style={s.input} value={tmpl.code} placeholder="ej: TRG-F-020"
+            onChange={e=>setTmpl(t=>({...t,code:e.target.value}))}/>
+        </div>
+      </div>
+      <div>
+        <label style={s.label}>Nombre del formulario *</label>
+        <input style={s.input} value={tmpl.label} placeholder="ej: Grúa Puente BC4"
+          onChange={e=>setTmpl(t=>({...t,label:e.target.value}))}/>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
+        <div>
+          <label style={s.label}>Tipo</label>
+          <select style={s.input} value={tmpl.mode} onChange={e=>changeMode(e.target.value)}>
+            <option value="licencia">Licencia</option>
+            <option value="permiso">Permiso de Trabajo</option>
+          </select>
+        </div>
+        <div>
+          <label style={s.label}>Ícono</label>
+          <input style={s.input} value={tmpl.icon} placeholder="ej: BC4, ↑"
+            onChange={e=>setTmpl(t=>({...t,icon:e.target.value}))}/>
+        </div>
+        <div>
+          <label style={s.label}>Color</label>
+          <div style={{display:'flex',gap:6,alignItems:'center'}}>
+            <input type="color" value={tmpl.color} onChange={e=>setTmpl(t=>({...t,color:e.target.value}))}
+              style={{width:40,height:36,border:'none',borderRadius:6,cursor:'pointer'}}/>
+            <input style={{...s.input,flex:1}} value={tmpl.color} onChange={e=>setTmpl(t=>({...t,color:e.target.value}))}/>
+          </div>
+        </div>
+      </div>
+      <div>
+        <label style={s.label}>Prerequisito (opcional)</label>
+        <input style={s.input} value={tmpl.prereq} placeholder="ej: ¿Posee Licencia BC1 vigente? (Obligatorio)"
+          onChange={e=>setTmpl(t=>({...t,prereq:e.target.value}))}/>
+      </div>
+      <div style={{textAlign:'right'}}>
+        <button style={s.btnPrimary} onClick={()=>setStep(1)}>Siguiente →</button>
+      </div>
+    </div>}
+
+    {/* Step 1: Extra fields */}
+    {step===1&&<div style={{...s.card,display:'flex',flexDirection:'column',gap:14}}>
+      <h3 style={s.h2}>Campos adicionales del participante</h3>
+      <p style={{fontSize:13,color:T2}}>Marca los campos que aplican además de nombre, apellidos, cargo y fecha.</p>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+        {FIELD_OPTIONS.map(f=><label key={f} style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',
+          padding:'8px 12px',borderRadius:8,
+          border:`1px solid ${tmpl.extra_fields.includes(f)?BRAND:BD}`,
+          background:tmpl.extra_fields.includes(f)?'#EEF3FA':SF}}>
+          <input type="checkbox" checked={tmpl.extra_fields.includes(f)}
+            onChange={e=>setTmpl(t=>({...t,extra_fields:e.target.checked?[...t.extra_fields,f]:t.extra_fields.filter(x=>x!==f)}))}/>
+          <span style={{fontSize:12,fontWeight:500,color:tmpl.extra_fields.includes(f)?BRAND:TX}}>{f}</span>
+        </label>)}
+      </div>
+      <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+        <button style={s.btn} onClick={()=>setStep(0)}>← Anterior</button>
+        <button style={s.btnPrimary} onClick={()=>setStep(2)}>Siguiente →</button>
+      </div>
+    </div>}
+
+    {/* Step 2: Sections & items */}
+    {step===2&&<div style={{display:'flex',flexDirection:'column',gap:12}}>
+      {roles.map(role=><div key={role} style={s.card}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+          <h3 style={{...s.h2,margin:0}}>
+            {role==='operador'?'Secciones del formulario':`Rol: ${role.charAt(0).toUpperCase()+role.slice(1)}`}
+          </h3>
+          <button style={{...s.btnSm,color:BRAND,borderColor:BRAND}} onClick={()=>addSec(role)}>+ Sección</button>
+        </div>
+        {sections.filter(sc=>sc.role===role).map((sec)=>{
+          const realIdx=sections.findIndex(sc=>sc.id===sec.id);
+          return <div key={sec.id} style={{border:`1px solid ${BD}`,borderRadius:10,padding:'12px',marginBottom:10,background:'#FAFAFA'}}>
+            <div style={{display:'flex',gap:8,marginBottom:8}}>
+              <input style={{...s.input,flex:2}} value={sec.label} placeholder="Nombre de la sección"
+                onChange={e=>updSec(realIdx,'label',e.target.value)}/>
+              <input style={{...s.input,flex:1}} value={sec.subtitle} placeholder="Subtítulo (opcional)"
+                onChange={e=>updSec(realIdx,'subtitle',e.target.value)}/>
+              <button onClick={()=>remSec(realIdx)}
+                style={{cursor:'pointer',background:'#FEF2F2',color:R,border:`1px solid ${RBD}`,borderRadius:6,padding:'0 10px',flexShrink:0}}>✕</button>
+            </div>
+            {sec.items.map((item,iIdx)=><div key={iIdx} style={{display:'flex',gap:6,marginBottom:6,alignItems:'center'}}>
+              <span style={{color:T3,fontSize:11,minWidth:20,textAlign:'right'}}>{iIdx+1}.</span>
+              <input style={{...s.input,flex:1}} value={item} placeholder="Criterio de competencia observable..."
+                onChange={e=>updItem(realIdx,iIdx,e.target.value)}/>
+              <button onClick={()=>remItem(realIdx,iIdx)}
+                style={{cursor:'pointer',background:'none',border:'none',color:T3,fontSize:18,lineHeight:1}}>×</button>
+            </div>)}
+            <button style={{...s.btnSm,color:G,borderColor:GBD,marginTop:4}} onClick={()=>addItem(realIdx)}>+ Ítem</button>
+          </div>;
+        })}
+      </div>)}
+      <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+        <button style={s.btn} onClick={()=>setStep(1)}>← Anterior</button>
+        <button style={s.btnPrimary} onClick={()=>setStep(3)}>Revisar →</button>
+      </div>
+    </div>}
+
+    {/* Step 3: Review & save */}
+    {step===3&&<div style={{...s.card,display:'flex',flexDirection:'column',gap:12}}>
+      <h3 style={s.h2}>Resumen antes de guardar</h3>
+      <div style={{background:S2,borderRadius:8,padding:'12px 16px'}}>
+        <div style={{fontSize:14,fontWeight:600,color:TX}}>{tmpl.label||'(sin nombre)'}</div>
+        <div style={{fontSize:11,color:T2,marginTop:2}}>{tmpl.code} · {tmpl.mode} · ID: {tmpl.type_id}</div>
+        <div style={{fontSize:11,color:T2,marginTop:2}}>Campos adicionales: {tmpl.extra_fields.join(', ')||'ninguno'}</div>
+        {tmpl.prereq&&<div style={{fontSize:11,color:AM,marginTop:2}}>Prerequisito: {tmpl.prereq}</div>}
+      </div>
+      {roles.map(role=><div key={role}>
+        <div style={{fontSize:11,fontWeight:700,color:T3,textTransform:'uppercase',marginBottom:4,marginTop:8}}>{role}</div>
+        {sections.filter(sc=>sc.role===role).map((sec,i)=><div key={i} style={{marginLeft:8,marginBottom:6}}>
+          <div style={{fontSize:12,fontWeight:600,color:TX}}>{sec.label||'(sin nombre)'}</div>
+          {sec.items.filter(it=>it.trim()).map((it,j)=><div key={j} style={{fontSize:11,color:T2,marginLeft:8,marginBottom:2}}>• {it}</div>)}
+        </div>)}
+      </div>)}
+      {msg&&<div style={{padding:'10px 14px',borderRadius:8,fontSize:12,fontWeight:500,
+        background:msg.startsWith('✓')?GBKG:RBKG,
+        color:msg.startsWith('✓')?G:R,
+        border:`1px solid ${msg.startsWith('✓')?GBD:RBD}`}}>{msg}</div>}
+      <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+        <button style={s.btn} onClick={()=>setStep(2)}>← Editar</button>
+        <button style={s.btnPrimary} disabled={saving} onClick={save}>
+          {saving?'Guardando...':'💾 Guardar formulario'}
+        </button>
+      </div>
+    </div>}
   </div>;
 }
