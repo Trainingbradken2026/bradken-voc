@@ -2443,12 +2443,21 @@ export default function App(){
       {view==='admin:newform'&&<FormBuilder onBack={()=>setView('admin:list')} supabase={supabase} loadFormsDB={loadFormsDB} s={s} TX={TX} T2={T2} T3={T3} BD={BD} SF={SF} S2={S2} BRAND={BRAND} G={G} R={R} AM={AM} GBD={GBD} RBD={RBD} GBKG={GBKG} RBKG={RBKG}/>}
 
             {view==='admin:docmeta'&&(()=>{
+        // Include new Supabase forms alongside hardcoded TYPES
+        const newPermisosMeta=formTemplates.filter(ft=>ft.mode==='permiso'&&!TYPES.find(t=>t.id===ft.type_id)).map(ft=>({id:ft.type_id,label:ft.label,code:ft.code,color:ft.color||BK,icon:ft.icon||'★',mode:ft.mode}));
+        const newLicenciasMeta=formTemplates.filter(ft=>ft.mode==='licencia'&&!TYPES.find(t=>t.id===ft.type_id)).map(ft=>({id:ft.type_id,label:ft.label,code:ft.code,color:ft.color||'#005596',icon:ft.icon||'★',mode:ft.mode}));
         const cats=[
-          {label:'Permisos de Trabajo de Alto Riesgo', types:TYPES.filter(t=>t.mode==='permiso')},
+          {label:'Permisos de Trabajo de Alto Riesgo', types:[...TYPES.filter(t=>t.mode==='permiso'),...newPermisosMeta]},
           {label:'Licencias de Equipo y Vehículo', types:TYPES.filter(t=>t.mode==='licencia'&&!t.id.startsWith('bm'))},
           {label:'Licencias para Fundir – Horno de Inducción (BM)', types:TYPES.filter(t=>t.id.startsWith('bm'))},
+          ...(newLicenciasMeta.length>0?[{label:'Operaciones', types:newLicenciasMeta}]:[]),
         ];
-        const getMeta=(typeId)=>({...DOC_META_DEFAULTS[typeId],...(docMeta[typeId]||{})});
+        const getMeta=(typeId)=>{
+          // For new Supabase forms, build defaults from form_templates data
+          const ft=formTemplates.find(f=>f.type_id===typeId);
+          const base=DOC_META_DEFAULTS[typeId]||{bknDoc:ft?.code||typeId,fecha:'',revisadoPor:'',aprobadoPor:'',rev:'1',fechaEmision:'',clausula:'Emisión inicial.'};
+          return {...base,...(docMeta[typeId]||{})};
+        };
         return <div>
           <button style={s.back} onClick={()=>{setDocMetaType(null);setView('admin:list');}}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -2466,7 +2475,7 @@ export default function App(){
                     const isModified=!!docMeta[t.id];
                     return <button key={t.id} onClick={()=>{
                         setDocMetaType(t.id);
-                        setDocMetaForm({...m});
+                        setDocMetaForm({...getMeta(t.id)});
                         setDocMetaMsg('');
                       }}
                       style={{...s.card,cursor:'pointer',display:'flex',alignItems:'center',gap:12,padding:'12px 16px',textAlign:'left',border:`1px solid ${isModified?'#C3D5F0':BD}`,background:isModified?BRANDL:SF}}>
@@ -2485,7 +2494,7 @@ export default function App(){
                 </div>
               </div>)
             : (()=>{
-                const t=TYPES.find(x=>x.id===docMetaType);
+                const t=TYPES.find(x=>x.id===docMetaType)||(()=>{const ft=formTemplates.find(f=>f.type_id===docMetaType);return ft?{id:ft.type_id,label:ft.label,code:ft.code,color:ft.color||'#005596',icon:ft.icon||'★'}:null;})();
                 return <div>
                   <button style={s.back} onClick={()=>{setDocMetaType(null);setDocMetaMsg('');}}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
