@@ -223,25 +223,47 @@ function genCode(){
 function today(){
   return new Date().toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'});
 }
-function initEval(type,role){
+function initEval(type, role, formTemplatesDB=[], formSectionsDB=[]){
   const t=TYPES.find(x=>x.id===type);
   const mode=t?.mode||'permiso';
   const effectiveRole=mode==='licencia'?'operador':role;
   let domains;
-  if(mode==='licencia'){
-    const secs=COMP_LIC[type]?.operador||[];
-    domains=secs.map(sec=>({
-      k:sec.k, label:sec.label, sub:sec.sub||'',
-      items:sec.items.map(text=>({text,result:null})),
-      domainResult:null, obs:''
-    }));
-  } else {
-    domains=DOM.map((d,i)=>({
-      ...d,
-      items:(COMP[type]?.[effectiveRole]?.[i]||[]).map(text=>({text,result:null})),
-      domainResult:null, obs:''
-    }));
+
+  // ── Try Supabase-loaded data first ──────────────────────────────────────
+  const tmpl=formTemplatesDB.find(t=>t.type_id===type);
+  if(tmpl&&formSectionsDB.length>0){
+    const secs=formSectionsDB
+      .filter(s=>s.template_id===tmpl.id&&s.role===effectiveRole)
+      .sort((a,b)=>a.order_index-b.order_index);
+    if(secs.length>0){
+      domains=secs.map(sec=>({
+        k:sec.section_key, label:sec.label, sub:sec.subtitle||'',
+        items:(sec.form_items||[])
+          .sort((a,b)=>a.order_index-b.order_index)
+          .map(i=>({text:i.text,result:null})),
+        domainResult:null, obs:''
+      }));
+    }
   }
+
+  // ── Fallback: hardcoded data ─────────────────────────────────────────────
+  if(!domains||!domains.length){
+    if(mode==='licencia'){
+      const secs=COMP_LIC[type]?.operador||[];
+      domains=secs.map(sec=>({
+        k:sec.k, label:sec.label, sub:sec.sub||'',
+        items:sec.items.map(text=>({text,result:null})),
+        domainResult:null, obs:''
+      }));
+    } else {
+      domains=DOM.map((d,i)=>({
+        ...d,
+        items:(COMP[type]?.[effectiveRole]?.[i]||[]).map(text=>({text,result:null})),
+        domainResult:null, obs:''
+      }));
+    }
+  }
+
   return{
     id:genCode(), type, role:effectiveRole, mode:mode, status:'draft',
     docCode:t.code, color:t.color,
@@ -1479,6 +1501,9 @@ export default function App(){
   const [docMetaSaving,setDocMetaSaving]=useState(false);
   const [docMetaMsg,setDocMetaMsg]=useState('');
   const [keepaliveMsg,setKeepaliveMsg]=useState('');
+  const [formTemplates,setFormTemplates]=useState([]);
+  const [formSections,setFormSections]=useState([]);
+  const [formsLoaded,setFormsLoaded]=useState(false);
   const [pinInput,setPinInput]=useState('');
   const [pinError,setPinError]=useState('');
   const [pinVisible,setPinVisible]=useState(false);
@@ -1491,6 +1516,9 @@ export default function App(){
   const [evalPinError,setEvalPinError]=useState('');
   const [evalPinVisible,setEvalPinVisible]=useState(false);
   const [evalPinAttempts,setEvalPinAttempts]=useState(0);
+
+  // Load form templates from Supabase on startup
+  useEffect(()=>{ loadFormsDB(); },[]);
 
   // Refresh pending re-evals every time the evaluator reaches the category screen
   useEffect(()=>{
@@ -1560,6 +1588,20 @@ export default function App(){
     setAdminEvals(all);
     try{ await supabase.from('config').upsert({key:'keepalive',value:new Date().toISOString(),site:'global'}); }catch(e){}
     setAdminLoading(false);
+  }
+
+  async function loadFormsDB(){
+    try{
+      const{data:tmpl}=await supabase.from('form_templates').select('*').eq('site','chilca').eq('is_active',true);
+      if(!tmpl||!tmpl.length) return false;
+      const tmplIds=tmpl.map(t=>t.id);
+      const{data:secs}=await supabase.from('form_sections').select('*, form_items(*)').in('template_id',tmplIds);
+      if(!secs) return false;
+      setFormTemplates(tmpl);
+      setFormSections(secs);
+      setFormsLoaded(true);
+      return true;
+    }catch(e){ console.warn('Forms DB load failed:',e); return false; }
   }
 
   async function loadDocMeta(){
@@ -1796,7 +1838,7 @@ export default function App(){
                         const reevals=await loadPendingReevals();
                         setPendingReevals(reevals);
                         // Start new eval pre-filled with original participant data
-                        const newEval=initEval(e.type,e.role);
+                        const newEval=initEval(e.type,e.role,formTemplates,formSections);
                         newEval.participant={
                           ...newEval.participant,
                           nombres:e.participant?.nombres||'',
@@ -1890,7 +1932,7 @@ export default function App(){
           bm: TYPES.filter(t=>t.id.startsWith('bm')),
         };
         const handleTypeClick=(t)=>{
-          if(t.mode==='licencia'){setEv(initEval(t.id,'operador'));setView('eval:participant');}
+          if(t.mode==='licencia'){setEv(initEval(t.id,'operador',formTemplates,formSections));setView('eval:participant');}
           else{setEv(e=>({...e,_type:t.id}));setView('eval:role');}
         };
         const TypeCard=({t})=><button onClick={()=>handleTypeClick(t)}
@@ -1977,7 +2019,7 @@ export default function App(){
           ].map(r=>{
             const activeType=ev?._type||ev?.type;
             const t=TYPES.find(x=>x.id===activeType)||TYPES[0];
-            return <button key={r.id} onClick={()=>{setEv(initEval(activeType,r.id));setView('eval:participant');}}
+            return <button key={r.id} onClick={()=>{setEv(initEval(activeType,r.id,formTemplates,formSections));setView('eval:participant');}}
               style={{...s.card,cursor:'pointer',textAlign:'left',border:`1px solid ${BD}`,padding:'20px',transition:'all .15s'}}
               onMouseOver={e=>{e.currentTarget.style.borderColor=t.color;e.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,.1)';}}
               onMouseOut={e=>{e.currentTarget.style.borderColor=BD;e.currentTarget.style.boxShadow=SH;}}>
