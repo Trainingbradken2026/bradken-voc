@@ -2967,7 +2967,15 @@ function FormBuilder({onBack,supabase,loadFormsDB,s,TX,T2,T3,BD,SF,S2,BRAND,G,R,
   });
   const[saving,setSaving]=useState(false);
   const[msg,setMsg]=useState('');
-  const FIELDS=['equipo','turno','colada','logbook','supervisor','area','telefono'];
+  const FIELDS=[
+    {val:'equipo',lbl:'equipo'},
+    {val:'turno',lbl:'turno'},
+    {val:'colada',lbl:'colada'},
+    {val:'logbook',lbl:'logbook'},
+    {val:'supervisor',lbl:'supervisor'},
+    {val:'area',lbl:'Área / Tarea observada'},
+    {val:'telefono',lbl:'telefono'},
+  ];
   const roles=tmpl.mode==='licencia'?['operador']:['emisor','ejecutor'];
   const updSec=(idx,k,v)=>{const a=[...sections];a[idx]={...a[idx],[k]:v};setSections(a);};
   const updItem=(si,ii,v)=>{const a=[...sections];const its=[...a[si].items];its[ii]=v;a[si]={...a[si],items:its};setSections(a);};
@@ -3036,9 +3044,9 @@ function FormBuilder({onBack,supabase,loadFormsDB,s,TX,T2,T3,BD,SF,S2,BRAND,G,R,
     {step===1&&<div style={{...s.card,display:'flex',flexDirection:'column',gap:14}}>
       <h3 style={s.h2}>Campos adicionales del participante</h3>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-        {FIELDS.map(f=><label key={f} style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',padding:'8px 12px',borderRadius:8,border:`1px solid ${tmpl.extra_fields.includes(f)?BRAND:BD}`,background:tmpl.extra_fields.includes(f)?'#EEF3FA':SF}}>
-          <input type="checkbox" checked={tmpl.extra_fields.includes(f)} onChange={e=>setTmpl(t=>({...t,extra_fields:e.target.checked?[...t.extra_fields,f]:t.extra_fields.filter(x=>x!==f)}))}/>
-          <span style={{fontSize:12,fontWeight:500,color:tmpl.extra_fields.includes(f)?BRAND:TX}}>{f}</span>
+        {FIELDS.map(f=><label key={f.val} style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',padding:'8px 12px',borderRadius:8,border:`1px solid ${tmpl.extra_fields.includes(f.val)?BRAND:BD}`,background:tmpl.extra_fields.includes(f.val)?'#EEF3FA':SF}}>
+          <input type="checkbox" checked={tmpl.extra_fields.includes(f.val)} onChange={e=>setTmpl(t=>({...t,extra_fields:e.target.checked?[...t.extra_fields,f.val]:t.extra_fields.filter(x=>x!==f.val)}))}/>
+          <span style={{fontSize:12,fontWeight:500,color:tmpl.extra_fields.includes(f.val)?BRAND:TX}}>{f.lbl}</span>
         </label>)}
       </div>
       <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}><button style={s.btn} onClick={()=>setStep(0)}>← Anterior</button><button style={s.btnPrimary} onClick={()=>setStep(2)}>Siguiente →</button></div>
