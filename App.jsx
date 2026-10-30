@@ -27,6 +27,8 @@ const TYPES = [
   { id:'montacargas_e',label:'Montacargas Eléctrico (16T)',  sub:'Inspección · Operación · Maniobras', icon:'16T', code:'TRG-F-005E', color:'#0891B2', xfields:['equipo','turno'], mode:'licencia' },
   { id:'manlift3b',  label:'Manlift Brazo Móvil (3b)',   sub:'Brazo articulado · 17.80 m',     icon:'3b',  code:'TRG-F-012', color:'#0369A1', xfields:['equipo','turno'], mode:'licencia' },
   { id:'tijera3a',   label:'Elevador Vertical Tijera (3a)', sub:'Plataforma de tijera vertical', icon:'3a', code:'TRG-F-013', color:'#059669', xfields:['equipo','turno'], mode:'licencia' },
+  // ── VOC genérica (R20029): cualquier tarea con WI y equipo asociado, 3 firmas ──
+  { id:'voc-generica', label:'VOC Genérica: Tarea y Máquina', sub:'Cualquier actividad con Instructivo de Trabajo (WI)', icon:'VOC', code:'R20029_1', color:'#334155', xfields:['wi','maquina','area','turno','experiencia','lineManager'], mode:'licencia', requiresAuth:true },
   // ── Licencias de Fundición – Horno de Inducción ─────────────────────
   { id:'bm1', label:'BM1 – Preparación de Carga', sub:'Horno de inducción · Req: BC1', icon:'BM1', code:'BM-LTM-001', color:'#D97706', xfields:['colada','turno','logbook','supervisor'], mode:'licencia', prereq:'¿Posee Licencia BC1 vigente? (Obligatorio)' },
   { id:'bm2', label:'BM2 – Operaciones de Horno', sub:'Fusión · ELD · Sangrado · Req: BM1', icon:'BM2', code:'BM-LTM-002', color:'#B45309', xfields:['colada','turno','logbook','supervisor'], mode:'licencia', prereq:'¿Posee Licencia BM1 vigente? (Obligatorio)' },
@@ -246,21 +248,82 @@ function initEval(type,role,formTemplatesDB=[],formSectionsDB=[]){
     }
   }
   return{id:genCode(),type,role:effectiveRole,mode,status:'draft',docCode:t.code,color:t.color,
-    participant:{nombres:'',apellidos:'',cargo:'',fechaCurso:'',prereqCheck:null,logbook:null,colada:'',turno:'',equipo:'',area:'',operacionObservada:'',supNombre:'',supFecha:'',telefono:''},
-    evaluator:{nombre:'',fecha:today()},domains,overallResult:null,comments:'',approval:null,aiRec:'',createdAt:new Date().toISOString()};
+    participant:{nombres:'',apellidos:'',cargo:'',fechaCurso:'',prereqCheck:null,logbook:null,colada:'',turno:'',equipo:'',area:'',operacionObservada:'',supNombre:'',supFecha:'',telefono:'',wiTitulo:'',wiCodigo:'',wiRevision:'',wiFecha:'',maquinaTag:'',experiencia:'',minTiempo:'',lineManager:''},
+    evaluator:{nombre:'',fecha:today()},domains,overallResult:null,comments:'',approval:null,authorization:null,aiRec:'',createdAt:new Date().toISOString()};
 }
-function flatEval(d){return{id:d.id,type:d.type,role:d.role,mode:d.mode||'permiso',status:d.status||'draft',doc_code:d.docCode||'',color:d.color||'#005596',participant:d.participant||{},evaluator:d.evaluator||{},domains:d.domains||[],overall_result:d.overallResult||null,comments:d.comments||'',approval:d.approval||null,ai_rec:d.aiRec||'',evaluator_signed_at:d.evaluatorSignedAt||null,site:'chilca'};}
-function normalizeEval(row){return{id:row.id,type:row.type,role:row.role,mode:row.mode||'permiso',status:row.status||'draft',docCode:row.doc_code||'',color:row.color||'#005596',participant:row.participant||{nombres:'',apellidos:'',cargo:'',fechaCurso:'',prereqCheck:null,logbook:null,colada:'',turno:'',equipo:'',operacionObservada:'',supNombre:'',supFecha:'',telefono:'',area:''},evaluator:row.evaluator||{nombre:'',fecha:''},domains:row.domains||[],overallResult:row.overall_result||null,comments:row.comments||'',approval:row.approval||null,aiRec:row.ai_rec||'',evaluatorSignedAt:row.evaluator_signed_at||null,createdAt:row.created_at||new Date().toISOString(),plan:row.plan||null};}
+function flatEval(d){return{id:d.id,type:d.type,role:d.role,mode:d.mode||'permiso',status:d.status||'draft',doc_code:d.docCode||'',color:d.color||'#005596',participant:d.participant||{},evaluator:d.evaluator||{},domains:d.domains||[],overall_result:d.overallResult||null,comments:d.comments||'',approval:d.approval||null,...(d.authorization?{authorization:d.authorization}:{}),ai_rec:d.aiRec||'',evaluator_signed_at:d.evaluatorSignedAt||null,site:'chilca'};}
+function normalizeEval(row){return{id:row.id,type:row.type,role:row.role,mode:row.mode||'permiso',status:row.status||'draft',docCode:row.doc_code||'',color:row.color||'#005596',participant:row.participant||{nombres:'',apellidos:'',cargo:'',fechaCurso:'',prereqCheck:null,logbook:null,colada:'',turno:'',equipo:'',operacionObservada:'',supNombre:'',supFecha:'',telefono:'',area:'',wiTitulo:'',wiCodigo:'',wiRevision:'',wiFecha:'',maquinaTag:'',experiencia:'',minTiempo:'',lineManager:''},evaluator:row.evaluator||{nombre:'',fecha:''},domains:row.domains||[],overallResult:row.overall_result||null,comments:row.comments||'',approval:row.approval||null,authorization:row.authorization||null,aiRec:row.ai_rec||'',evaluatorSignedAt:row.evaluator_signed_at||null,createdAt:row.created_at||new Date().toISOString(),plan:row.plan||null};}
 async function saveEval(d){try{const{error}=await supabase.from('evaluaciones').upsert(flatEval(d));return!error;}catch(e){return false;}}
 async function loadEval(code){try{const{data,error}=await supabase.from('evaluaciones').select('*').eq('id',code.toUpperCase().trim()).single();if(error||!data)return null;return normalizeEval(data);}catch(e){return null;}}
 async function loadAllEvals(){try{const{data,error}=await supabase.from('evaluaciones').select('*').order('created_at',{ascending:false});if(error||!data)return[];return data.map(normalizeEval);}catch(e){return[];}}
-const PIN_DEFAULTS={training_pin:'2025',evaluator_pin:'2723'};
+const PIN_DEFAULTS={training_pin:'2025',evaluator_pin:'2723',manager_pin:'4816'};
 async function loadPin(key){try{const{data}=await supabase.from('config').select('value').eq('key',key).single();return data?.value||PIN_DEFAULTS[key]||'2025';}catch(e){return PIN_DEFAULTS[key]||'2025';}}
 async function savePin(key,pin){try{const{error}=await supabase.from('config').upsert({key,value:pin,site:'global'});return!error;}catch(e){return false;}}
 
 // ── Licencias de equipo: datos de competencia ─────────────────────────────
 // COMP_LIC[type].operador = [{k, label, sub, items:[...strings]}]
 const COMP_LIC = {
+  'voc-generica': { operador: [
+    { k:'precond', label:'1. Condiciones y Requisitos Previos', sub:'Verificación antes de evaluar (si no se cumple, reprogramar)', items:[
+      'Instructivo de Trabajo vigente y disponible en el punto de uso.',
+      'Formación teórica y prerrequisitos completados.',
+      'Equipo/máquina disponible y en condición operacional.',
+      'Área y condiciones de trabajo aptas para la actividad.',
+      'EPP y recursos requeridos disponibles.',
+      'Instrumentos de medición calibrados/verificados y vigentes.',
+    ]},
+    { k:'conocimiento', label:'2. Evaluación de Conocimiento', sub:'Método: O observación · P pregunta verbal · S simulación', items:[
+      'Identifica y accede al Instructivo de Trabajo vigente (WI) aplicable a la tarea.',
+      'Explica el propósito y alcance de la tarea.',
+      'Identifica los riesgos de la tarea y del equipo asociado.',
+      'Explica los controles definidos para los riesgos identificados.',
+      'Identifica parámetros y criterios de aceptación definidos en el WI.',
+      'Explica el impacto de la tarea en la calidad y en el cliente.',
+      'Explica qué hacer ante una condición no contemplada en el WI.',
+    ]},
+    { k:'preparacion', label:'3. Evaluación de Preparación', sub:'Método: observación directa', items:[
+      'Utiliza el EPP requerido para la tarea.',
+      'Verifica el estado del EPP antes de iniciar.',
+      'Verifica las condiciones del área de trabajo.',
+      'Confirma la disponibilidad de herramientas, materiales y recursos.',
+      'Realiza la inspección preoperacional (checklist) del equipo.',
+      'Confirma que las condiciones iniciales cumplen lo establecido en el WI.',
+    ]},
+    { k:'ejecucion', label:'4. Ejecución de la Tarea y Operación del Equipo', sub:'Operación del equipo · Comportamiento y autonomía', items:[
+      'Realiza el arranque o puesta en marcha del equipo según el WI.',
+      'Utiliza correctamente los controles y dispositivos del equipo.',
+      'Opera el equipo dentro de los parámetros establecidos.',
+      'Monitorea el funcionamiento del equipo durante la tarea.',
+      'Identifica señales, alarmas y condiciones anormales del equipo.',
+      'Realiza la parada o apagado del equipo de forma segura.',
+      'Sigue el WI sin apartarse de él sin justificación y autorización.',
+      'Mantiene atención y control durante toda la ejecución.',
+      'Ejecuta la tarea de forma independiente, sin asistencia continua.',
+    ]},
+    { k:'control', label:'5. Control del Proceso y Resultado', sub:'Seguridad · Medio ambiente · Calidad · Registros', items:[
+      'Seguridad: aplica los controles críticos requeridos (LOTOTO, zona de exclusión, guardas).',
+      'Medio ambiente: contiene derrames, fugas y gestiona residuos según el WI.',
+      'Calidad: verifica el producto contra los criterios de aceptación.',
+      'Resultado de la tarea conforme, sin reproceso.',
+      'Parámetros del proceso dentro de los rangos definidos en el WI.',
+      'Completa los registros requeridos (checklists, trazabilidad).',
+    ]},
+    { k:'desviaciones', label:'6. Gestión de Desviaciones y Situaciones Anormales', sub:'Detener · Reportar · Segregar', items:[
+      'Reconoce una condición fuera de estándar.',
+      'Sabe detener o interrumpir la actividad cuando corresponde.',
+      'Conoce la respuesta ante una anomalía o emergencia.',
+      'No continúa la operación sin condiciones seguras o autorización.',
+      'Identifica, rotula y segrega el producto no conforme.',
+      'Explica qué haría si se le pide omitir un paso o liberar producto dudoso.',
+      'Comunica la condición al responsable.',
+    ]},
+    { k:'cierre', label:'7. Cierre de la Tarea', sub:'Aislamiento · Orden · Registros · Comunicación', items:[
+      'Realiza el aislamiento y desaislamiento del equipo según corresponda.',
+      'Deja el equipo y el área limpios, ordenados y seguros.',
+      'Completa los registros requeridos al cierre.',
+      'Comunica la finalización y la condición del equipo a las partes interesadas.',
+    ]},
+  ]},
   bc1: { operador: [
     { k:'preop', label:'1. Preparación e Inspección Preoperacional', sub:'EPP · Zona de exclusión · Estado del equipo', items:[
       'Selecciona y utiliza correctamente el EPP requerido para la tarea (casco, guantes, lentes, calzado de seguridad).',
@@ -1204,6 +1267,16 @@ function PrintView({ev,onClose,docMeta={}}){
       <tr><H>Operación observada y comentarios / recomendaciones</H><C colSpan={3} s={{lineHeight:1.6,minHeight:32}}>{ev.participant?.operacionObservada||''}</C></tr>
     </tbody></table>
 
+    {/* ── WI Y EQUIPO (solo VOC genérica) ── */}
+    {typeInfo?.xfields?.includes('wi')&&<table style={{width:'100%',borderCollapse:'collapse',marginBottom:4}}><tbody>
+      <tr><Sec colSpan={4}>Identificación de la Actividad y Estándar de Trabajo</Sec></tr>
+      <tr><H s={{width:'22%'}}>Actividad / Tarea evaluada</H><C colSpan={3}>{ev.participant.area||''}</C></tr>
+      <tr><H>Instructivo de Trabajo (WI)</H><C>{ev.participant.wiTitulo||''}</C><H s={{width:'14%'}}>Código</H><C>{ev.participant.wiCodigo||''}</C></tr>
+      <tr><H>Revisión / Fecha de emisión</H><C>{[ev.participant.wiRevision,ev.participant.wiFecha].filter(Boolean).join(' / ')}</C><H>Tiempo mínimo</H><C>{ev.participant.minTiempo||''}</C></tr>
+      <tr><H>Máquina / Equipo asociado</H><C>{ev.participant.equipo||''}</C><H>Tag</H><C>{ev.participant.maquinaTag||''}</C></tr>
+      <tr><H>Cargo / Puesto</H><C>{ev.participant.cargo||''}</C><H>Experiencia</H><C>{ev.participant.experiencia||''}</C></tr>
+    </tbody></table>}
+
     {/* ── CONDICIONES DE LA EVALUACIÓN ── */}
     <table style={{width:'100%',borderCollapse:'collapse',marginBottom:4}}><tbody>
       <tr><Sec colSpan={4}>Condiciones de la Evaluación</Sec></tr>
@@ -1321,6 +1394,36 @@ function PrintView({ev,onClose,docMeta={}}){
         <C s={{width:'18%'}}><span style={{color:'#555',fontSize:9}}>Fecha de confirmación:</span><br/><b>{ev.approval.fecha||'__/__/____'}</b></C>
       </tr>
     </tbody></table>}
+
+    {/* ── AUTORIZACIÓN Y EFICACIA (tercera firma) ── */}
+    {typeInfo?.requiresAuth&&(()=>{
+      const au=ev.authorization||null;
+      const chk=(v,x)=>v===x?'☑':'☐';
+      return <table style={{width:'100%',borderCollapse:'collapse',marginBottom:4}}><tbody>
+        <tr><td colSpan={4} style={{border:'1px solid #C8D4E8',padding:'5px 8px',fontSize:11,fontWeight:700,background:'#334155',color:'#fff'}}>
+          Autorización, Validación de Competencia y Eficacia de la Acción de Learning
+        </td></tr>
+        <tr><td colSpan={4} style={{border:'1px solid #C8D4E8',padding:'5px 7px',fontSize:10.5,lineHeight:1.6}}>
+          Se confirma que la competencia demostrada por el colaborador fue verificada conforme al estándar de trabajo aplicable.
+        </td></tr>
+        <tr><H s={{width:'22%'}}>Resultado</H>
+          <C colSpan={3} s={{fontWeight:700}}>{chk(ev.overallResult,'C')} COMPETENTE &nbsp;&nbsp; {chk(ev.overallResult,'NCA')} AÚN NO COMPETENTE</C></tr>
+        <tr><H>Resultado de eficacia</H>
+          <C colSpan={3} s={{fontWeight:700}}>{chk(au?.eficacia,'EFICAZ')} EFICAZ &nbsp;&nbsp; {chk(au?.eficacia,'NO_EFICAZ')} NO EFICAZ</C></tr>
+        <tr><H>Task / Máquina / Equipo</H><C colSpan={3}>{[ev.participant.area,ev.participant.equipo].filter(Boolean).join(' / ')}</C></tr>
+        <tr><H>Autorización</H>
+          <C colSpan={3} s={{fontWeight:700}}>{chk(au?.autorizacion,'AUTORIZADO')} AUTORIZADO &nbsp;&nbsp; {chk(au?.autorizacion,'NO_AUTORIZADO')} NO AUTORIZADO</C></tr>
+        <tr><H>Manager Line</H><C colSpan={3} s={{fontWeight:600}}>{au?.by||ev.participant.lineManager||''}</C></tr>
+        <tr>
+          <H>Firma</H>
+          <C colSpan={2}>{au?<DigSig name={au.by} ts={au.signedAt} label="✦ Autorizado electrónicamente" color='#334155' bgColor='#F1F5F9'/>:'___________________________'}</C>
+          <C s={{width:'18%'}}><span style={{color:'#555',fontSize:9}}>Fecha:</span><br/><b>{au?.fecha||'__/__/____'}</b></C>
+        </tr>
+        <tr><td colSpan={4} style={{border:'1px solid #C8D4E8',padding:'5px 7px',fontSize:9.5,lineHeight:1.5,color:'#444'}}>
+          <b>Criterio de eficacia: </b>cuando la VOC es el método definido para evaluar la acción de Learning, el resultado COMPETENTE evidencia que la competencia requerida fue demostrada y que la acción fue eficaz. Con resultado AÚN NO COMPETENTE, la acción de Learning se considera NO EFICAZ.
+        </td></tr>
+      </tbody></table>;
+    })()}
 
     {/* ── RESUMEN DE REVISIONES ── */}
     <div style={{textAlign:'center',fontSize:12,fontWeight:600,margin:'10px 0 4px',color:'#1A1A2E'}}>Tabla 1.&nbsp;&nbsp;Resumen de la revisión</div>
@@ -1520,6 +1623,12 @@ export default function App(){
   const [pinError,setPinError]=useState('');
   const [pinVisible,setPinVisible]=useState(false);
   const [pinAttempts,setPinAttempts]=useState(0);
+  const [mgrPinInput,setMgrPinInput]=useState('');
+  const [mgrPinError,setMgrPinError]=useState('');
+  const [mgrPinAttempts,setMgrPinAttempts]=useState(0);
+  const [pendingAuth,setPendingAuth]=useState([]);
+  const [authLoading,setAuthLoading]=useState(false);
+  const [pinTarget,setPinTarget]=useState('training_pin');
   const [changingPin,setChangingPin]=useState(false);
   const [newPin,setNewPin]=useState('');
   const [newPinConfirm,setNewPinConfirm]=useState('');
@@ -1582,11 +1691,34 @@ export default function App(){
     }
   }
 
+  async function loadPendingAuth(){
+    setAuthLoading(true);
+    const all=await loadAllEvals();
+    setPendingAuth(all.filter(e=>e.status==='pending_authorization'));
+    setAuthLoading(false);
+  }
+  async function openManager(){
+    setMgrPinInput('');setMgrPinError('');setMgrPinAttempts(0);
+    setView('authorize:pin');
+  }
+  async function verifyMgrPin(){
+    const correct=await loadPin('manager_pin');
+    if(mgrPinInput===correct){
+      setMgrPinError('');setMgrPinAttempts(0);setMgrPinInput('');
+      await loadPendingAuth();
+      setView('authorize:list');
+    } else {
+      const att=mgrPinAttempts+1;
+      setMgrPinAttempts(att);setMgrPinInput('');
+      setMgrPinError(att>=5?'Acceso bloqueado. Recarga la página para reiniciar.':`PIN incorrecto. Intento ${att} de 5.`);
+    }
+  }
+
   async function handleChangePin(){
     if(!newPin||newPin.length<4){setPinChangeMsg('El PIN debe tener al menos 4 dígitos.');return;}
     if(newPin!==newPinConfirm){setPinChangeMsg('Los PINs no coinciden.');return;}
     if(!/^\d+$/.test(newPin)){setPinChangeMsg('El PIN solo puede contener números.');return;}
-    const ok=await savePin('training_pin', newPin);
+    const ok=await savePin(pinTarget, newPin);
     if(ok){setPinChangeMsg('✓ PIN actualizado correctamente.');setNewPin('');setNewPinConfirm('');
       setTimeout(()=>{setChangingPin(false);setPinChangeMsg('');},2000);}
     else{setPinChangeMsg('Error al guardar. Intenta nuevamente.');}
@@ -1703,21 +1835,33 @@ export default function App(){
     setView('eval:code');
   }
 
-  async function handleLookup(){
+  async function handleLookup(target){
+    target=typeof target==='string'?target:'approve:view';
     if(!codeIn.trim()){setErr('Ingresa el código de evaluación.');return;}
     setLoadEv(true);setErr('');
     const found=await loadEval(codeIn);
     setLoadEv(false);
     if(!found){setErr('Código no encontrado. Verifica e intenta nuevamente.');return;}
     setEv(found);
-    setView('approve:view');
+    setView(target);
   }
 
   async function handleApprove(name){
-    const updated={...ev,status:'approved',approval:{by:name,fecha:today(),signedAt:new Date().toISOString()}};
+    const needsAuth=!!TYPES.find(x=>x.id===ev.type)?.requiresAuth;
+    const updated={...ev,status:needsAuth?'pending_authorization':'approved',approval:{by:name,fecha:today(),signedAt:new Date().toISOString()}};
     await saveEval(updated);
     setEv(updated);
     setView('approve:done');
+  }
+
+  // Tercera firma: quien autoriza y marca la eficacia de la acción de Learning
+  async function handleAuthorize(name,eficacia,autorizacion){
+    const updated={...ev,status:'authorized',authorization:{by:name,fecha:today(),signedAt:new Date().toISOString(),eficacia,autorizacion}};
+    const ok=await saveEval(updated);
+    if(!ok){return false;}
+    setEv(updated);
+    setView('authorize:done');
+    return true;
   }
 
   if(printing&&ev) return <PrintView ev={ev} onClose={closePrint} docMeta={docMeta[ev.type]||{}}/>;
@@ -1780,6 +1924,14 @@ export default function App(){
             <div style={{fontSize:11,fontWeight:600,color:x.color,textTransform:'uppercase',letterSpacing:'0.04em',lineHeight:1.5}}>{x.sub}</div>
           </button>)}
         </div>
+        <button onClick={openManager}
+          style={{...s.card,cursor:'pointer',textAlign:'left',width:'100%',display:'flex',alignItems:'center',gap:16,padding:'16px 20px',border:`1px solid ${BD}`,marginBottom:14}}>
+          <div style={{width:44,height:44,background:'#F1F5F9',borderRadius:11,display:'flex',alignItems:'center',justifyContent:'center',color:'#334155',flexShrink:0,fontSize:20}}>✔</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:15,fontWeight:600,color:TX,marginBottom:2}}>Soy Line Manager / Líder del Área</div>
+            <div style={{fontSize:12,color:T2}}>Autorización / Eficacia: evaluaciones pendientes de mi firma</div>
+          </div>
+        </button>
         <button onClick={openAdmin}
           style={{...s.card,cursor:'pointer',textAlign:'left',width:'100%',display:'flex',alignItems:'center',gap:16,padding:'16px 20px',border:`1px solid ${BD}`,transition:'border-color .15s,box-shadow .15s'}}
           onMouseOver={e=>{e.currentTarget.style.borderColor=AM;e.currentTarget.style.boxShadow='0 4px 20px rgba(245,158,11,.12)';}}
@@ -2110,6 +2262,38 @@ export default function App(){
                   onChange={e=>upEv(n=>{n.participant.colada=e.target.value;})}
                   placeholder="Ej: C-2025-147"/>
               </div>}
+              {xf.includes('wi')&&<div style={{...s.card,padding:'14px 16px',marginTop:4,borderColor:BD}}>
+                <div style={{fontSize:12,fontWeight:600,color:TX,marginBottom:10}}>Instructivo de Trabajo (WI) y estándar aplicable</div>
+                <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:10,marginBottom:10}}>
+                  <div><label style={s.label}>Título del Instructivo de Trabajo</label>
+                    <input style={s.input} value={ev.participant.wiTitulo||''} onChange={e=>upEv(n=>{n.participant.wiTitulo=e.target.value;})} placeholder="Título del WI"/></div>
+                  <div><label style={s.label}>Código del WI</label>
+                    <input style={s.input} value={ev.participant.wiCodigo||''} onChange={e=>upEv(n=>{n.participant.wiCodigo=e.target.value;})} placeholder="Código"/></div>
+                </div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10}}>
+                  <div><label style={s.label}>Revisión / Edición</label>
+                    <input style={s.input} value={ev.participant.wiRevision||''} onChange={e=>upEv(n=>{n.participant.wiRevision=e.target.value;})} placeholder="Rev."/></div>
+                  <div><label style={s.label}>Fecha de emisión del WI</label>
+                    <input style={s.input} value={ev.participant.wiFecha||''} onChange={e=>upEv(n=>{n.participant.wiFecha=e.target.value;})} placeholder="DD/MM/AAAA"/></div>
+                  <div><label style={s.label}>Tiempo mínimo de evaluación</label>
+                    <input style={s.input} value={ev.participant.minTiempo||''} onChange={e=>upEv(n=>{n.participant.minTiempo=e.target.value;})} placeholder="Ej: 60 min"/></div>
+                </div>
+              </div>}
+              {xf.includes('maquina')&&<div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:10}}>
+                <div><label style={s.label}>Máquina / Equipo asociado</label>
+                  <input style={s.input} value={ev.participant.equipo||''} onChange={e=>upEv(n=>{n.participant.equipo=e.target.value;})} placeholder="Nombre del equipo o máquina"/></div>
+                <div><label style={s.label}>N° de identificación / Tag</label>
+                  <input style={s.input} value={ev.participant.maquinaTag||''} onChange={e=>upEv(n=>{n.participant.maquinaTag=e.target.value;})} placeholder="Tag"/></div>
+              </div>}
+              {xf.includes('lineManager')&&<div style={{...s.card,padding:'14px 16px',marginTop:4,borderColor:AM,background:ABKG}}>
+                <label style={s.label}>Line Manager / Líder del Área (obligatorio)</label>
+                <input style={s.input} value={ev.participant.lineManager||''} onChange={e=>upEv(n=>{n.participant.lineManager=e.target.value;})} placeholder="Nombre completo de quien autorizará la evaluación"/>
+                <p style={{fontSize:11,color:T2,margin:'6px 0 0'}}>Esta persona recibirá la evaluación en su bandeja de Autorización / Eficacia. Escribe el nombre siempre igual para que se agrupe bien.</p>
+              </div>}
+              {xf.includes('experiencia')&&<div>
+                <label style={s.label}>Experiencia en la tarea / equipo</label>
+                <input style={s.input} value={ev.participant.experiencia||''} onChange={e=>upEv(n=>{n.participant.experiencia=e.target.value;})} placeholder="Ej: 2 años operando este equipo"/>
+              </div>}
               {xf.includes('turno')&&<div>
                 <label style={s.label}>Turno de evaluación</label>
                 <div style={{display:'flex',gap:10,marginTop:4}}>
@@ -2153,6 +2337,7 @@ export default function App(){
           <button style={{...s.btnPrimary,marginTop:4}}
             onClick={()=>{
               if(!ev.participant.nombres||!ev.participant.apellidos){setErr('Nombres y apellidos son obligatorios.');return;}
+              if(TYPES.find(x=>x.id===ev.type)?.requiresAuth&&!(ev.participant.lineManager||'').trim()){setErr('El nombre del Line Manager / Líder del Área es obligatorio.');return;}
               setErr('');setView('eval:form');
             }}>
             Iniciar evaluación
@@ -2676,6 +2861,10 @@ export default function App(){
         {keepaliveMsg&&<div style={{background:keepaliveMsg.startsWith('✓')?GBKG:RBKG,border:`1px solid ${keepaliveMsg.startsWith('✓')?GBD:RBD}`,borderRadius:8,padding:'8px 16px',marginBottom:12,fontSize:12,color:keepaliveMsg.startsWith('✓')?G:R,fontWeight:500}}>{keepaliveMsg}</div>}
 
         {changingPin&&<div style={{...s.card,marginBottom:16,padding:'16px 20px',borderColor:ABD,background:ABKG}}>
+          <div style={{display:'flex',gap:8,marginBottom:10}}>
+            {[['training_pin','PIN Training'],['manager_pin','PIN Line Manager']].map(([k,l])=><button key={k} onClick={()=>setPinTarget(k)}
+              style={{padding:'5px 14px',borderRadius:20,fontSize:12,fontWeight:600,cursor:'pointer',background:pinTarget===k?AM:'transparent',color:pinTarget===k?'#fff':AM,border:`1.5px solid ${AM}`}}>{l}</button>)}
+          </div>
           <p style={{fontSize:13,fontWeight:600,marginBottom:12,color:AM,display:'flex',alignItems:'center',gap:6}}><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'><circle cx='12' cy='12' r='2'/><circle cx='19' cy='12' r='1'/><circle cx='5' cy='12' r='1'/><path d='M17 12a5 5 0 0 1-5 5 5 5 0 0 1-5-5'/></svg> Cambiar PIN de acceso</p>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
             <div>
@@ -2700,8 +2889,8 @@ export default function App(){
         {/* KPI Cards */}
         {!adminLoading&&adminEvals.length>0&&(()=>{
           const total=adminEvals.length;
-          const approved=adminEvals.filter(e=>e.status==='approved').length;
-          const pending=adminEvals.filter(e=>e.status==='pending_approval').length;
+          const approved=adminEvals.filter(e=>e.status==='approved'||e.status==='authorized').length;
+          const pending=adminEvals.filter(e=>e.status==='pending_approval'||e.status==='pending_authorization').length;
           // Conformes / No Conformes por trabajador único — solo su evaluación más reciente por tipo
           const latestByWorker={};
           adminEvals.forEach(e=>{
@@ -2743,6 +2932,8 @@ export default function App(){
             <option value=''>Todos los estados</option>
             <option value='pending_approval'>Pendiente aprobación</option>
             <option value='approved'>Firmado</option>
+            <option value='pending_authorization'>Por autorizar</option>
+            <option value='authorized'>Autorizado</option>
           </select>
         </div>
 
@@ -2808,9 +2999,9 @@ export default function App(){
                       </td>
                       <td style={{padding:'8px 10px'}}>
                         <span style={{...s.tag,fontSize:11,
-                          background:e.status==='approved'?GBKG:e.status==='pending_approval'?ABKG:S2,
-                          color:e.status==='approved'?G:e.status==='pending_approval'?AM:T2}}>
-                          {e.status==='approved'?'Firmada':e.status==='pending_approval'?'Pendiente':'Borrador'}
+                          background:(e.status==='approved'||e.status==='authorized')?GBKG:(e.status==='pending_approval'||e.status==='pending_authorization')?ABKG:S2,
+                          color:(e.status==='approved'||e.status==='authorized')?G:(e.status==='pending_approval'||e.status==='pending_authorization')?AM:T2}}>
+                          {e.status==='authorized'?'Autorizada':e.status==='pending_authorization'?'Por autorizar':e.status==='approved'?'Firmada':e.status==='pending_approval'?'Pendiente':'Borrador'}
                         </span>
                       </td>
                       <td style={{padding:'8px 10px',fontSize:12,color:'var(--text-secondary)',whiteSpace:'nowrap'}}>
@@ -2861,6 +3052,72 @@ export default function App(){
         </p>
       </div>}
 
+      {/* ── AUTHORIZE: PIN ── */}
+      {view==='authorize:pin'&&<div style={{maxWidth:360,margin:'48px auto'}}>
+        <button style={s.back} onClick={reset}>← Inicio</button>
+        <div style={{...s.card,textAlign:'center',padding:'32px 24px'}}>
+          <h2 style={{...s.h1,fontSize:22,marginBottom:4}}>Autorización / Eficacia</h2>
+          <p style={{fontSize:13,color:T2,marginBottom:24}}>Acceso para Line Managers y Líderes de Área. Ingresa tu PIN.</p>
+          <input type="password" inputMode="numeric" value={mgrPinInput} autoFocus maxLength={8} disabled={mgrPinAttempts>=5}
+            onChange={e=>setMgrPinInput(e.target.value.replace(/\D/g,''))}
+            onKeyDown={e=>e.key==='Enter'&&mgrPinAttempts<5&&verifyMgrPin()}
+            placeholder="••••" style={{...s.input,textAlign:'center',fontSize:28,letterSpacing:8,fontFamily:"'DM Mono',monospace",boxSizing:'border-box'}}/>
+          {mgrPinError&&<p style={{fontSize:12,color:R,margin:'6px 0 12px'}}>{mgrPinError}</p>}
+          <button style={{...s.btnPrimary,width:'100%',padding:12,fontSize:15,marginTop:8,opacity:mgrPinAttempts>=5?0.4:1}}
+            onClick={verifyMgrPin} disabled={mgrPinAttempts>=5||!mgrPinInput}>Ingresar →</button>
+        </div>
+      </div>}
+
+      {/* ── AUTHORIZE: LIST (pendientes por Line Manager) ── */}
+      {view==='authorize:list'&&(()=>{
+        const grouped={};
+        pendingAuth.forEach(e=>{
+          const k=(e.participant?.lineManager||'Sin Line Manager asignado').trim().toUpperCase();
+          (grouped[k]=grouped[k]||[]).push(e);
+        });
+        const names=Object.keys(grouped).sort();
+        return <div>
+          <button style={s.back} onClick={reset}>← Inicio</button>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <h2 style={s.h1}>Autorización / Eficacia</h2>
+            <button style={s.btn} onClick={loadPendingAuth} disabled={authLoading}>{authLoading?'↻ Actualizando...':'↻ Actualizar'}</button>
+          </div>
+          <p style={{color:T2,fontSize:13,margin:'4px 0 20px'}}>Evaluaciones firmadas por evaluador y evaluado, pendientes de autorización · agrupadas por Line Manager / Líder del Área</p>
+          {names.length===0
+            ? <div style={{...s.card,textAlign:'center',padding:'32px'}}>
+                <div style={{fontSize:32,marginBottom:8}}>🟢</div>
+                <p style={{color:T2}}>No hay evaluaciones pendientes de autorización.</p>
+              </div>
+            : names.map(nm=><div key={nm} style={{marginBottom:18}}>
+                <div style={{fontSize:11,fontWeight:700,color:T3,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:8,padding:'0 4px'}}>
+                  {nm} · {grouped[nm].length} pendiente{grouped[nm].length>1?'s':''}
+                </div>
+                {grouped[nm].map(e=><button key={e.id} onClick={()=>{setEv(e);setView('authorize:view');}}
+                  style={{...s.card,width:'100%',textAlign:'left',cursor:'pointer',padding:'14px 16px',marginBottom:8,border:`1px solid ${ABD}`,background:ABKG,display:'flex',alignItems:'center',gap:12}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:14,fontWeight:600,color:TX}}>{e.participant?.nombres} {e.participant?.apellidos}</div>
+                    <div style={{fontSize:12,color:T2,marginTop:2}}>{TYPES.find(x=>x.id===e.type)?.label||e.type} · Código {e.id} · Evaluador: {e.evaluator?.nombre}</div>
+                  </div>
+                  <ResultBadge r={e.overallResult}/>
+                </button>)}
+              </div>)}
+        </div>;
+      })()}
+
+      {/* ── AUTHORIZE: VIEW ── */}
+      {view==='authorize:view'&&ev&&<AuthorizerView ev={ev} onAuthorize={handleAuthorize} onPrint={()=>openPrint('authorize:view')} onBack={()=>{loadPendingAuth();setView('authorize:list');}}/>}
+
+      {/* ── AUTHORIZE: DONE ── */}
+      {view==='authorize:done'&&ev&&<div style={{textAlign:'center',padding:'32px 0'}}>
+        <div style={{fontSize:48,marginBottom:12}}>✅</div>
+        <h2 style={s.h1}>Autorización registrada</h2>
+        <p style={{color:'var(--text-secondary)',marginBottom:24}}>Eficacia: {ev.authorization?.eficacia==='EFICAZ'?'Eficaz':'No eficaz'} · {ev.authorization?.autorizacion==='AUTORIZADO'?'Autorizado':'No autorizado'}</p>
+        <div style={{display:'flex',gap:10,justifyContent:'center'}}>
+          <button style={s.btnPrimary} onClick={()=>openPrint('authorize:done')}>🖨 Descargar PDF</button>
+          <button style={s.btn} onClick={async()=>{setEv(null);await loadPendingAuth();setView('authorize:list');}}>Volver a pendientes</button>
+        </div>
+      </div>}
+
       {/* ── APPROVE: ENTER ── */}
       {view==='approve:enter'&&<div>
         <button style={s.back} onClick={reset}>
@@ -2874,7 +3131,7 @@ export default function App(){
           <input style={{...s.input,textTransform:'uppercase',letterSpacing:4,fontSize:20,textAlign:'center',fontFamily:"'DM Mono',monospace"}}
             value={codeIn} onChange={e=>setCodeIn(e.target.value.toUpperCase())} placeholder="ABC123" maxLength={6}/>
           {err&&<p style={{color:R,fontSize:12,margin:'8px 0 0'}}>{err}</p>}
-          <button style={{...s.btnPrimary,width:'100%',marginTop:14}} onClick={handleLookup} disabled={loadEv}>
+          <button style={{...s.btnPrimary,width:'100%',marginTop:14}} onClick={()=>handleLookup('approve:view')} disabled={loadEv}>
             {loadEv?'Buscando...':'Buscar evaluación →'}
           </button>
         </div>
@@ -2887,7 +3144,7 @@ export default function App(){
       {view==='approve:done'&&ev&&<div style={{textAlign:'center',padding:'32px 0'}}>
         <div style={{fontSize:48,marginBottom:12}}>🎉</div>
         <h2 style={s.h1}>Evaluación firmada</h2>
-        <p style={{color:'var(--text-secondary)',marginBottom:24}}>Has firmado y confirmado tu evaluación de competencias.</p>
+        <p style={{color:'var(--text-secondary)',marginBottom:24}}>Has firmado y confirmado tu evaluación de competencias.{ev.status==='pending_authorization'?' Queda pendiente la autorización final de la línea de mando.':''}</p>
         <ResultBadge r={ev.overallResult}/>
         <div style={{marginTop:24,display:'flex',gap:10,justifyContent:'center'}}>
           <button style={s.btnPrimary} onClick={()=>openPrint('approve:done')}>🖨 Descargar PDF</button>
@@ -2901,7 +3158,7 @@ export default function App(){
 function ApproverView({ev,onApprove,onPrint,onBack}){
   const [name,setName]=useState(ev.participant.nombres+' '+ev.participant.apellidos);
   const t=TYPES.find(x=>x.id===ev.type);
-  if(ev.status==='approved') return <div>
+  if(ev.status==='approved'||ev.status==='pending_authorization'||ev.status==='authorized') return <div>
     <button style={s.back} onClick={onBack}>← Volver</button>
     <div style={{...s.card,textAlign:'center'}}>
       <div style={{fontSize:32,marginBottom:8}}>✅</div>
@@ -2949,6 +3206,77 @@ function ApproverView({ev,onApprove,onPrint,onBack}){
       </div>
     </div>
   </div>;
+}
+
+function AuthorizerView({ev,onAuthorize,onPrint,onBack}){
+  const t=TYPES.find(x=>x.id===ev.type);
+  const [name,setName]=useState(ev.authorization?.by||ev.participant?.lineManager||'');
+  const [auto,setAuto]=useState(null);
+  const [saving,setSaving]=useState(false);
+  const [msg,setMsg]=useState('');
+  const isC=ev.overallResult==='C';
+  // Regla R20029: AÚN NO COMPETENTE implica acción de Learning NO EFICAZ y no autorizado
+  const eficacia=isC?'EFICAZ':'NO_EFICAZ';
+  const autorizacion=isC?auto:'NO_AUTORIZADO';
+  const box=(children)=><div>
+    <button style={s.back} onClick={onBack}>← Volver</button>
+    {children}
+  </div>;
+  if(!t?.requiresAuth) return box(<div style={{...s.card,textAlign:'center'}}>
+    <h2 style={s.h1}>Esta evaluación no requiere autorización final</h2>
+    <p style={{color:'var(--text-secondary)'}}>El tipo de formulario {t?.label} usa el flujo de dos firmas.</p>
+  </div>);
+  if(ev.status==='authorized') return box(<div style={{...s.card,textAlign:'center'}}>
+    <div style={{fontSize:32,marginBottom:8}}>✅</div>
+    <h2 style={s.h1}>Ya fue autorizada</h2>
+    <p style={{color:'var(--text-secondary)',marginBottom:16}}>{ev.authorization?.fecha} por {ev.authorization?.by}</p>
+    <button style={s.btnPrimary} onClick={onPrint}>🖨 Descargar PDF</button>
+  </div>);
+  if(ev.status!=='pending_authorization') return box(<div style={{...s.card,textAlign:'center'}}>
+    <h2 style={s.h1}>Aún no está lista para autorizar</h2>
+    <p style={{color:'var(--text-secondary)'}}>Primero deben firmar el evaluador y el evaluado.</p>
+  </div>);
+  const total=ev.domains.reduce((a,d)=>a+d.items.length,0);
+  const nca=ev.domains.reduce((a,d)=>a+d.items.filter(i=>i.result==='NCA').length,0);
+  async function go(){
+    if(!name.trim()){setMsg('Ingresa tu nombre.');return;}
+    if(isC&&!auto){setMsg('Selecciona Autorizado o No autorizado.');return;}
+    setSaving(true);setMsg('');
+    const ok=await onAuthorize(name.trim(),eficacia,autorizacion);
+    setSaving(false);
+    if(!ok) setMsg('Error al guardar. Verifica que la columna authorization exista en Supabase.');
+  }
+  const opt=(val,label,cur,set,color,disabled)=><button disabled={disabled} onClick={()=>set&&set(val)}
+    style={{flex:1,padding:'10px',borderRadius:22,fontSize:13,fontWeight:600,cursor:disabled?'default':'pointer',
+      background:cur===val?color:SF,color:cur===val?'#fff':color,border:`1.5px solid ${color}`,opacity:disabled&&cur!==val?0.35:1}}>{label}</button>;
+  return box(<div>
+    <div style={{...s.card,marginBottom:12}}>
+      <div style={{fontSize:16,fontWeight:700,color:TX}}>{t.label}</div>
+      <div style={{fontSize:13,color:T2,margin:'4px 0 10px'}}>{ev.participant.nombres} {ev.participant.apellidos} · Evaluador: {ev.evaluator?.nombre} · Evaluado firmó: {ev.approval?.fecha}</div>
+      <ResultBadge r={ev.overallResult}/>
+      <div style={{fontSize:12,color:T2,marginTop:8}}>{total-nca}/{total} criterios conformes{nca>0?` · ${nca} NCA`:''}</div>
+      {ev.comments&&<p style={{fontSize:13,color:T2,margin:'10px 0 0'}}>{ev.comments}</p>}
+      <button style={{...s.btn,marginTop:12}} onClick={onPrint}>🖨 Ver documento completo</button>
+    </div>
+    <div style={{...s.card,background:'var(--surface-1)'}}>
+      <h3 style={{...s.h2,fontSize:16,marginBottom:12}}>Autorización y eficacia de la acción de Learning</h3>
+      <label style={s.label}>Resultado de eficacia (según el resultado de la VOC)</label>
+      <div style={{display:'flex',gap:10,margin:'6px 0 14px'}}>
+        {opt('EFICAZ','✅ Eficaz',eficacia,null,G,true)}
+        {opt('NO_EFICAZ','❌ No eficaz',eficacia,null,R,true)}
+      </div>
+      <label style={s.label}>Autorización</label>
+      <div style={{display:'flex',gap:10,margin:'6px 0 14px'}}>
+        {opt('AUTORIZADO','Autorizado',autorizacion,setAuto,G,!isC)}
+        {opt('NO_AUTORIZADO','No autorizado',autorizacion,setAuto,R,!isC)}
+      </div>
+      {!isC&&<p style={{fontSize:11,color:R,margin:'0 0 12px'}}>El resultado es AÚN NO COMPETENTE: la acción se marca No eficaz y no se autoriza.</p>}
+      <label style={s.label}>Manager Line (nombre completo)</label>
+      <input style={{...s.input,marginBottom:12}} value={name} onChange={e=>setName(e.target.value)} placeholder="Nombre de quien autoriza"/>
+      {msg&&<p style={{color:R,fontSize:12,margin:'0 0 10px'}}>{msg}</p>}
+      <button style={{...s.btnPrimary,width:'100%'}} onClick={go} disabled={saving}>{saving?'Guardando...':'Firmar autorización'}</button>
+    </div>
+  </div>);
 }
 
 function FormBuilder({onBack,supabase,loadFormsDB,s,TX,T2,T3,BD,SF,S2,BRAND,G,R,AM,GBD,RBD,GBKG,RBKG,initialTemplate=null,initialSections=[]}){
