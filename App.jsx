@@ -2086,6 +2086,11 @@ export default function App(){
             icon:<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2c0 6-8 6-8 12a8 8 0 0 0 16 0c0-6-8-6-8-12z"/></svg>,
             color:'#D97706', bg:'#FFFBEB',
             desc:'BM1 · BM2 · BM3 · BM4 · BM5 · BM6 · BM7' },
+          { id:'generica',
+            label:'VOC Genérica: Tarea y Máquina',
+            icon:<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/></svg>,
+            color:'#334155', bg:'#F1F5F9',
+            desc:'Cualquier tarea con Instructivo de Trabajo (WI) y equipo asociado · 3 firmas' },
           ...(newLicencias.length>0?[{ id:'operaciones',
             label:'Operaciones',
             icon:<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>,
@@ -2094,7 +2099,8 @@ export default function App(){
         ];
         const catTypes={
           permiso: [...TYPES.filter(t=>t.mode==='permiso'), ...newPermisos],
-          licencia: TYPES.filter(t=>t.mode==='licencia'&&!t.id.startsWith('bm')),
+          licencia: TYPES.filter(t=>t.mode==='licencia'&&!t.id.startsWith('bm')&&!t.requiresAuth),
+          generica: TYPES.filter(t=>t.requiresAuth),
           bm: TYPES.filter(t=>t.id.startsWith('bm')),
           operaciones: newLicencias,
         };
